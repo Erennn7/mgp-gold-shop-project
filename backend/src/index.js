@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const { connectDB, testConnection, getConnectionStatus } = require('./config/db');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const { fixSaleModel } = require('./utils/modelPatcher');
 
 // Load environment variables from .env file if present
 dotenv.config();
@@ -17,6 +18,14 @@ connectDB()
   .then(connection => {
     if (connection) {
       console.log('MongoDB connected successfully');
+      
+      // Apply model patches before starting server
+      try {
+        fixSaleModel();
+        console.log('Successfully applied model patches');
+      } catch (err) {
+        console.error('Error applying model patches:', err);
+      }
     } else {
       console.log('Running without MongoDB connection. Some features will be limited.');
       
@@ -41,6 +50,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev')); // Add logging middleware
+
+// Debug middleware to log all routes
+app.use((req, res, next) => {
+  console.log(`[DEBUG] ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // Basic route for testing
 app.get('/', (req, res) => {
@@ -81,21 +96,29 @@ app.post('/api/test-connection', async (req, res) => {
 
 // Route imports
 const productsRoutes = require('./routes/products');
-const purchasesRoutes = require('./routes/purchases');
+const salesRoutes = require('./routes/saleRoutes');
 const analyticsRoutes = require('./routes/analytics');
 const loansRoutes = require('./routes/loans');
 const customersRoutes = require('./routes/customers');
 const pricesRoutes = require('./routes/prices');
 const authRoutes = require('./routes/auth');
+const goldPurchasesRoutes = require('./routes/goldPurchases');
+const savingsSchemesRoutes = require('./routes/savingsScheme');
+const suppliersRoutes = require('./routes/suppliers');
+const goldSuppliesRoutes = require('./routes/goldSupplies');
 
 // Mount routes
 app.use('/api/products', productsRoutes);
-app.use('/api/purchases', purchasesRoutes);
+app.use('/api/sales', salesRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/loans', loansRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/prices', pricesRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/gold-purchases', goldPurchasesRoutes);
+app.use('/api/savings-schemes', savingsSchemesRoutes);
+app.use('/api/suppliers', suppliersRoutes);
+app.use('/api/gold-supplies', goldSuppliesRoutes);
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, '../public')));
@@ -122,9 +145,10 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 5001; // Default port is 5001 to avoid conflicts
+const PORT = process.env.PORT || 5002; // Using port 5002 to avoid conflicts
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`API is available at http://localhost:${PORT}/api`);
 });
 
 module.exports = app; 

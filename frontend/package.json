@@ -20,21 +20,30 @@
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.1.4",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.5.28",
     "jwt-decode": "^3.1.2",
+    "normalize.css": "^8.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.46.1",
+    "react-redux": "^9.2.0",
     "react-router-dom": "^6.15.0",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "react-to-print": "^2.14.13",
+    "react-toastify": "^11.0.5",
     "recharts": "^2.15.3",
-    "swr": "^2.2.2"
+    "swr": "^2.2.2",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@csstools/normalize.css": "^12.1.1",
     "concurrently": "^8.2.0",
     "cross-env": "^7.0.3",
     "electron": "^25.3.1",
     "electron-builder": "^24.6.3",
+    "postcss-normalize": "^13.0.1",
+    "sanitize.css": "^13.0.0",
     "wait-on": "^7.0.1"
   },
   "scripts": {
@@ -61,12 +70,18 @@
       {
         "from": "node_modules",
         "to": "app/node_modules",
-        "filter": ["axios/**/*", "dexie/**/*"]
+        "filter": [
+          "axios/**/*",
+          "dexie/**/*"
+        ]
       },
       {
         "from": "../backend",
         "to": "app/backend",
-        "filter": ["src/**/*", "package.json"]
+        "filter": [
+          "src/**/*",
+          "package.json"
+        ]
       }
     ],
     "directories": {

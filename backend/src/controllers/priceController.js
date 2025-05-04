@@ -16,18 +16,16 @@ exports.createPriceEntry = async (req, res) => {
     if (!req.body.addedBy) {
       req.body.addedBy = '645f340b631e1f847e33144c'; // Development user ID
     }
-
-    // Calculate final price per gram
-    const { pricePerGram, makingCharges, gst, otherCharges } = req.body;
-    const finalPricePerGram = 
-      Number(pricePerGram) + 
-      (Number(pricePerGram) * Number(makingCharges || 0) / 100) +
-      (Number(pricePerGram) * Number(gst || 0) / 100) +
-      Number(otherCharges || 0);
     
+    const { metalType, purity } = req.body;
+    
+    // Mark all previous entries for this metal type and purity as inactive
+    await PriceEntry.markPreviousEntriesInactive(metalType, purity);
+    
+    // Create new price entry (finalPricePerGram will be calculated in pre-save hook)
     const priceEntry = new PriceEntry({
       ...req.body,
-      finalPricePerGram: Number(finalPricePerGram.toFixed(2))
+      isActive: true
     });
     
     await priceEntry.save();
@@ -48,7 +46,7 @@ exports.createPriceEntry = async (req, res) => {
 // Get all price entries with filters
 exports.getPriceEntries = async (req, res) => {
   try {
-    const { metalType, purity, from, to } = req.query;
+    const { metalType, purity, from, to, activeOnly } = req.query;
     const filter = {};
     
     // Apply filters if provided
@@ -58,6 +56,11 @@ exports.getPriceEntries = async (req, res) => {
     
     if (purity) {
       filter.purity = purity;
+    }
+    
+    // Only show active prices if specified
+    if (activeOnly === 'true') {
+      filter.isActive = true;
     }
     
     if (from || to) {
@@ -125,45 +128,34 @@ exports.updatePriceEntry = async (req, res) => {
       });
     }
     
-    // If price components are updated, recalculate final price
-    if (req.body.pricePerGram || req.body.makingCharges || req.body.gst || req.body.otherCharges) {
-      // Get existing price entry
-      const existingPrice = await PriceEntry.findById(req.params.id);
-      
-      if (!existingPrice) {
-        return res.status(404).json({
-          success: false,
-          message: 'Price entry not found'
-        });
-      }
-      
-      // Calculate new final price
-      const pricePerGram = req.body.pricePerGram || existingPrice.pricePerGram;
-      const makingCharges = req.body.makingCharges || existingPrice.makingCharges;
-      const gst = req.body.gst || existingPrice.gst;
-      const otherCharges = req.body.otherCharges || existingPrice.otherCharges;
-      
-      const finalPricePerGram = 
-        Number(pricePerGram) + 
-        (Number(pricePerGram) * Number(makingCharges) / 100) +
-        (Number(pricePerGram) * Number(gst) / 100) +
-        Number(otherCharges);
-      
-      req.body.finalPricePerGram = Number(finalPricePerGram.toFixed(2));
-    }
+    // Get existing price entry
+    const existingPrice = await PriceEntry.findById(req.params.id);
     
-    const priceEntry = await PriceEntry.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    
-    if (!priceEntry) {
+    if (!existingPrice) {
       return res.status(404).json({
         success: false,
         message: 'Price entry not found'
       });
     }
+    
+    // If this price is being reactivated or metal/purity changed, deactivate other active prices
+    if (
+      (req.body.isActive === true && !existingPrice.isActive) ||
+      (req.body.metalType && req.body.metalType !== existingPrice.metalType) ||
+      (req.body.purity && req.body.purity !== existingPrice.purity)
+    ) {
+      await PriceEntry.markPreviousEntriesInactive(
+        req.body.metalType || existingPrice.metalType,
+        req.body.purity || existingPrice.purity
+      );
+    }
+    
+    // Update the price entry
+    const priceEntry = await PriceEntry.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
     
     res.json({ 
       success: true, 
@@ -208,10 +200,20 @@ exports.getLatestPrice = async (req, res) => {
   try {
     const { metalType, purity } = req.params;
     
-    const latestPrice = await PriceEntry.findOne({
+    // Find the active price (should be only one per metal+purity)
+    let latestPrice = await PriceEntry.findOne({
       metalType,
-      purity
-    }).sort({ effectiveDate: -1, createdAt: -1 });
+      purity,
+      isActive: true
+    });
+    
+    // If no active price, fall back to the most recent one
+    if (!latestPrice) {
+      latestPrice = await PriceEntry.findOne({
+        metalType,
+        purity
+      }).sort({ effectiveDate: -1, createdAt: -1 });
+    }
     
     if (!latestPrice) {
       return res.status(404).json({

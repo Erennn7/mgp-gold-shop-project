@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Customer = require('../models/Customer');
+const mongoose = require('mongoose');
 
 // GET /api/customers - Get all customers
 router.get('/', async (req, res) => {
@@ -8,12 +9,53 @@ router.get('/', async (req, res) => {
     const { type } = req.query;
     const filter = {};
     
+    console.log('GET /api/customers - Request received with query:', req.query);
+    
     // Filter by customer type if provided
     if (type && type !== 'all') {
       filter.customerType = type;
+      console.log('Filtering by customerType:', type);
     }
     
-    const customers = await Customer.find(filter).sort({ createdAt: -1 });
+    console.log('Using filter:', filter);
+    
+    // Get total count first - make sure there's no hidden limit
+    const totalCount = await Customer.countDocuments({});
+    console.log('Total customers in database:', totalCount);
+    
+    // Direct MongoDB query to double-check
+    try {
+      const db = mongoose.connection.db;
+      const collection = db.collection('customers');
+      // Don't limit, get them all
+      const directCustomers = await collection.find({}).toArray();
+      console.log('Direct MongoDB query found:', directCustomers.length, 'customers');
+      
+      // Log all direct customers for debugging
+      directCustomers.forEach((cust, i) => {
+        console.log(`MongoDB Customer ${i + 1}:`, {
+          id: cust._id,
+          name: cust.name,
+          phone: cust.phone
+        });
+      });
+    } catch (dbError) {
+      console.error('Error with direct MongoDB query:', dbError);
+    }
+    
+    // Use lean() to get plain objects and ensure no limit
+    const customers = await Customer.find(filter).lean().sort({ createdAt: -1 });
+    
+    console.log(`Returning ${customers.length} customers via Mongoose`);
+    
+    // Log customer details for debugging
+    customers.forEach((customer, index) => {
+      console.log(`Customer ${index + 1}:`, {
+        id: customer._id,
+        name: customer.name,
+        phone: customer.phone
+      });
+    });
     
     res.json({ 
       success: true, 

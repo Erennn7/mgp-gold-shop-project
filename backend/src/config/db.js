@@ -14,24 +14,19 @@ const connectDB = async () => {
     // Check if we're running in Electron
     const isElectron = process.env.ELECTRON_RUN === 'true';
     
-    // Use MongoDB Atlas URI or local MongoDB server
+    // Use local MongoDB instance instead of Atlas with placeholder domain
     const dbURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers';
-    
-    // If we're in development and not in Electron, try local connection first
-    const isDev = process.env.NODE_ENV === 'development';
-    const useLocalFirst = isDev && !isElectron;
     
     // Connection options to handle deprecation warnings
     const options = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 10000, // 10 seconds timeout for server selection
+      serverSelectionTimeoutMS: 30000, // 30 seconds timeout for server selection
       socketTimeoutMS: 45000, // 45 seconds timeout for operations
       family: 4, // Use IPv4, skip trying IPv6
       maxPoolSize: 10, // Maximum number of connections in the pool
-      connectTimeoutMS: 10000, // 10 seconds timeout for initial connection
+      connectTimeoutMS: 30000, // 30 seconds timeout for initial connection
       retryWrites: true,
-      // Auto-retry connection for 1 minute
       retryReads: true
     };
     
@@ -53,26 +48,21 @@ const connectDB = async () => {
       fs.appendFileSync(logPath, `${new Date().toISOString()} - Connecting to: ${dbURI.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}\n`);
     }
     
-    console.log(`Attempting to connect to MongoDB${useLocalFirst ? ' (trying local first)' : ''}...`);
+    console.log('Connecting to MongoDB...');
+    console.log('Database URI:', dbURI.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')); // Hide credentials
     
-    // Try to connect
-    let conn;
-    
-    if (useLocalFirst) {
-      // In development, try local MongoDB first
-      try {
-        conn = await mongoose.connect('mongodb://localhost:27017/mg-potdar-jewellers', options);
-        console.log('Connected to local MongoDB');
-      } catch (localError) {
-        console.log('Local MongoDB connection failed, trying Atlas...');
-        conn = await mongoose.connect(dbURI, options);
-      }
-    } else {
-      // In production or when specifically configured, go straight to the configured URI
-      conn = await mongoose.connect(dbURI, options);
+    // Close existing connection if any
+    if (mongoose.connection.readyState !== 0) {
+      console.log('Closing existing MongoDB connection before reconnecting...');
+      await mongoose.connection.close();
     }
     
+    // Connect to MongoDB
+    const conn = await mongoose.connect(dbURI, options);
+    
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    console.log(`Database name: ${conn.connection.name}`);
+    console.log(`Connection state: ${mongoose.connection.readyState}`);
     isConnected = true;
     connectionAttempts = 0;
     
@@ -118,6 +108,7 @@ const connectDB = async () => {
     return conn;
   } catch (error) {
     console.error(`Error connecting to MongoDB: ${error.message}`);
+    console.error(error.stack);
     
     // If not already attempting to reconnect, start reconnection process
     if (isConnected === false && connectionAttempts === 0) {
@@ -141,6 +132,7 @@ const attemptReconnect = () => {
   
   setTimeout(async () => {
     try {
+      // Use local MongoDB for reconnection attempts
       await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers', {
         useNewUrlParser: true,
         useUnifiedTopology: true

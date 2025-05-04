@@ -7,6 +7,10 @@ import App from './App';
 import theme from './theme';
 import { AuthProvider } from './store/AuthContext';
 import { DatabaseProvider } from './store/DatabaseContext';
+import { ToastContainer } from 'react-toastify';
+import './styles/toastify.css'; // Use our custom CSS instead of react-toastify's CSS
+
+// Database deletion safeguard has been removed to allow proper cleanup of IndexedDB
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
@@ -21,6 +25,7 @@ root.render(
           </DatabaseProvider>
         </AuthProvider>
       </BrowserRouter>
+      <ToastContainer position="top-right" autoClose={3000} />
     </ThemeProvider>
   </React.StrictMode>
 ); 

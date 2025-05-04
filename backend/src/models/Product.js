@@ -23,9 +23,27 @@ const productSchema = new mongoose.Schema(
       required: [true, 'Purity is required'],
       trim: true
     },
-    weight: {
+    netWeight: {
       type: Number,
-      required: [true, 'Weight is required'],
+      required: [true, 'Net weight (metal only) is required'],
+      min: 0
+    },
+    grossWeight: {
+      type: Number,
+      required: [true, 'Gross weight (total) is required'],
+      min: 0
+    },
+    hasStones: {
+      type: Boolean,
+      default: false
+    },
+    stoneDetails: {
+      type: String,
+      trim: true
+    },
+    stonePrice: {
+      type: Number,
+      default: 0,
       min: 0
     },
     description: {

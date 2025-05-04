@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const Purchase = require('../models/Purchase');
+const Sale = require('../models/Sale');
 const Customer = require('../models/Customer');
 const Loan = require('../models/Loan');
 const Product = require('../models/Product');
+const GoldPurchase = require('../models/GoldPurchase');
 const { format, subDays } = require('date-fns');
 
 // GET /api/analytics/dashboard - Get dashboard analytics
@@ -12,7 +13,12 @@ router.get('/dashboard', async (req, res) => {
     // Get real data from database
     
     // Get total sales
-    const totalSales = await Purchase.aggregate([
+    const totalSales = await Sale.aggregate([
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+    ]);
+    
+    // Get total gold purchases
+    const totalGoldPurchases = await GoldPurchase.aggregate([
       { $group: { _id: null, total: { $sum: "$totalAmount" } } }
     ]);
     
@@ -22,8 +28,14 @@ router.get('/dashboard', async (req, res) => {
     // Get active loans
     const activeLoans = await Loan.countDocuments({ status: 'active' });
     
-    // Get recent purchases (last 5)
-    const recentPurchases = await Purchase.find()
+    // Get recent sales (last 5)
+    const recentSales = await Sale.find()
+      .populate('customer', 'name phone email')
+      .sort({ createdAt: -1 })
+      .limit(5);
+    
+    // Get recent gold purchases (last 5)
+    const recentGoldPurchases = await GoldPurchase.find()
       .populate('customer', 'name phone email')
       .sort({ createdAt: -1 })
       .limit(5);
@@ -38,18 +50,38 @@ router.get('/dashboard', async (req, res) => {
       salesByDay.push({
         date: format(date, 'dd/MM'),
         sales: 0,
+        purchases: 0,
         _date: new Date(date.setHours(0, 0, 0, 0))
       });
     }
     
-    // Get purchases for last 30 days
+    // Get sales for last 30 days
     const thirtyDaysAgo = subDays(today, 30);
-    const recentSales = await Purchase.find({
+    const recentSaleData = await Sale.find({
+      createdAt: { $gte: thirtyDaysAgo }
+    });
+    
+    // Get gold purchases for last 30 days
+    const recentGoldPurchaseData = await GoldPurchase.find({
       createdAt: { $gte: thirtyDaysAgo }
     });
     
     // Populate sales by day
-    recentSales.forEach(purchase => {
+    recentSaleData.forEach(sale => {
+      const saleDate = new Date(sale.createdAt);
+      saleDate.setHours(0, 0, 0, 0);
+      
+      const dayIndex = salesByDay.findIndex(day => 
+        day._date.getTime() === saleDate.getTime()
+      );
+      
+      if (dayIndex !== -1) {
+        salesByDay[dayIndex].sales += sale.totalAmount;
+      }
+    });
+    
+    // Populate gold purchases by day
+    recentGoldPurchaseData.forEach(purchase => {
       const purchaseDate = new Date(purchase.createdAt);
       purchaseDate.setHours(0, 0, 0, 0);
       
@@ -58,7 +90,7 @@ router.get('/dashboard', async (req, res) => {
       );
       
       if (dayIndex !== -1) {
-        salesByDay[dayIndex].sales += purchase.totalAmount;
+        salesByDay[dayIndex].purchases += purchase.totalAmount;
       }
     });
     
@@ -66,14 +98,14 @@ router.get('/dashboard', async (req, res) => {
     salesByDay.forEach(day => delete day._date);
     
     // Calculate sales by metal type
-    const purchasesWithItems = await Purchase.find();
+    const salesWithItems = await Sale.find();
     
     let goldSales = 0;
     let silverSales = 0;
     
-    // Loop through purchases to calculate sales by metal type
-    purchasesWithItems.forEach(purchase => {
-      purchase.items.forEach(item => {
+    // Loop through sales to calculate sales by metal type
+    salesWithItems.forEach(sale => {
+      sale.items.forEach(item => {
         if (item.metalType === 'gold') {
           goldSales += item.totalPrice;
         } else if (item.metalType === 'silver') {
@@ -87,8 +119,30 @@ router.get('/dashboard', async (req, res) => {
       { name: 'Silver', value: silverSales }
     ];
     
+    // Calculate purchases by metal type
+    const purchasesWithItems = await GoldPurchase.find();
+    
+    let goldPurchases = 0;
+    let silverPurchases = 0;
+    
+    // Loop through purchases to calculate by metal type
+    purchasesWithItems.forEach(purchase => {
+      purchase.items.forEach(item => {
+        if (item.metalType === 'gold') {
+          goldPurchases += item.totalAmount;
+        } else if (item.metalType === 'silver') {
+          silverPurchases += item.totalAmount;
+        }
+      });
+    });
+    
+    const purchasesByMetal = [
+      { name: 'Gold', value: goldPurchases },
+      { name: 'Silver', value: silverPurchases }
+    ];
+    
     // Get top products by sales
-    const topProducts = await Purchase.aggregate([
+    const topProducts = await Sale.aggregate([
       { $unwind: "$items" },
       {
         $group: {
@@ -114,11 +168,14 @@ router.get('/dashboard', async (req, res) => {
     // Create dashboard data object
     const dashboardData = {
       totalSales: totalSales.length > 0 ? totalSales[0].total : 0,
+      totalGoldPurchases: totalGoldPurchases.length > 0 ? totalGoldPurchases[0].total : 0,
       totalCustomers,
       activeLoans,
-      recentPurchases,
+      recentSales,
+      recentGoldPurchases,
       salesByDay,
       salesByMetal,
+      purchasesByMetal,
       topProducts
     };
 
@@ -142,7 +199,7 @@ router.get('/sales', async (req, res) => {
     const monthlySales = await calculateMonthlySales();
     
     // Calculate sales by category
-    const salesByCategory = await Purchase.aggregate([
+    const salesByCategory = await Sale.aggregate([
       { $unwind: "$items" },
       {
         $group: {
@@ -184,8 +241,8 @@ async function calculateMonthlySales() {
   // Define months
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   
-  // Get all purchases for the current year
-  const purchases = await Purchase.find({
+  // Get all sales for the current year
+  const sales = await Sale.find({
     createdAt: {
       $gte: new Date(`${currentYear}-01-01`),
       $lte: new Date(`${currentYear}-12-31`)
@@ -202,10 +259,10 @@ async function calculateMonthlySales() {
   }
   
   // Aggregate sales by month and metal type
-  purchases.forEach(purchase => {
-    const month = new Date(purchase.createdAt).getMonth();
+  sales.forEach(sale => {
+    const month = new Date(sale.createdAt).getMonth();
     
-    purchase.items.forEach(item => {
+    sale.items.forEach(item => {
       if (item.metalType === 'gold') {
         results[month].gold += item.totalPrice;
       } else if (item.metalType === 'silver') {

@@ -33,7 +33,9 @@ import {
   Card,
   CardContent,
   CardActions,
-  CardMedia
+  CardMedia,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { 
   Add, 
@@ -76,7 +78,12 @@ const Products = () => {
       hoid: '',
       metalType: 'gold',
       purity: '',
-      weight: '',
+      netWeight: '',
+      grossWeight: '',
+      hasStones: false,
+      stoneDetails: '',
+      stonePrice: 0,
+      makingChargesPercentage: 3,
       description: '',
       category: '',
       image: '',
@@ -86,6 +93,7 @@ const Products = () => {
 
   // Watch for metal type changes in the form
   const watchMetalType = watch('metalType');
+  const watchHasStones = watch('hasStones');
 
   // Get database context
   const { db, resetDatabase } = useDatabase();
@@ -95,7 +103,7 @@ const Products = () => {
     fetchProducts();
   }, [tabValue]);
 
-  // Function to fetch products from API or IndexedDB
+  // Function to fetch products from API
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -104,7 +112,7 @@ const Products = () => {
       setIsOffline(!online);
 
       if (online) {
-        // If online, fetch from API
+        // Fetch from API
         try {
           const metalType = tabValue === 0 ? 'gold' : 'silver';
           const response = await api.get(`/api/products?metalType=${metalType}`);
@@ -113,64 +121,29 @@ const Products = () => {
           }
         } catch (apiError) {
           console.error('API error fetching products:', apiError);
-          // Try IndexedDB as fallback
-          await fetchFromIndexedDB();
+          setSnackbar({
+            open: true,
+            message: 'Error fetching products from server',
+            severity: 'error'
+          });
         }
       } else {
-        // If offline, fetch from IndexedDB
-        await fetchFromIndexedDB();
+        // Show offline message
+        setSnackbar({
+          open: true,
+          message: 'You are offline. Please check your connection.',
+          severity: 'warning'
+        });
       }
     } catch (error) {
       console.error('Error fetching products:', error);
-      handleDatabaseError(error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to fetch products',
+        severity: 'error'
+      });
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Helper function to fetch from IndexedDB
-  const fetchFromIndexedDB = async () => {
-    if (!db) return;
-    
-    try {
-      const metalType = tabValue === 0 ? 'gold' : 'silver';
-      const cachedProducts = await db.products
-        .where('metalType')
-        .equals(metalType)
-        .toArray();
-      setProducts(cachedProducts);
-    } catch (dbError) {
-      console.error('IndexedDB error:', dbError);
-      handleDatabaseError(dbError);
-    }
-  };
-
-  // Helper function to handle database errors
-  const handleDatabaseError = (error) => {
-    if (error && (error.name === 'DatabaseClosedError' || 
-                  error.message.includes('Database has been closed') ||
-                  error.message.includes('Internal error opening backing store'))) {
-      if (resetDatabase) {
-        console.warn('Database is closed or corrupted, attempting to reset...');
-        resetDatabase().then(() => {
-          setSnackbar({
-            open: true,
-            message: 'Database has been reset due to corruption. Refreshing data...',
-            severity: 'warning'
-          });
-          // Wait a moment before trying to fetch again
-          setTimeout(() => {
-            fetchProducts();
-          }, 1000);
-        }).catch(resetError => {
-          console.error('Failed to reset database:', resetError);
-          setSnackbar({
-            open: true,
-            message: 'Failed to reset corrupted database. Please refresh the page.',
-            severity: 'error'
-          });
-        });
-      }
     }
   };
 
@@ -199,7 +172,10 @@ const Products = () => {
     hoid: product.hoid || 'No ID',
     metalType: product.metalType || 'gold',
     purity: product.purity || '-',
-    weight: typeof product.weight === 'number' ? product.weight : Number(product.weight || 0),
+    netWeight: typeof product.netWeight === 'number' ? product.netWeight : Number(product.netWeight || 0),
+    grossWeight: typeof product.grossWeight === 'number' ? product.grossWeight : Number(product.grossWeight || 0),
+    hasStones: product.hasStones || false,
+    stoneDetails: product.stoneDetails || '',
     category: product.category || '-',
     currentStock: product.currentStock || 0,
     image: product.image || ''
@@ -216,7 +192,25 @@ const Products = () => {
       setValue('hoid', product.hoid);
       setValue('metalType', product.metalType);
       setValue('purity', product.purity);
-      setValue('weight', product.weight);
+      
+      // Handle weight fields (support old and new schema)
+      if (product.netWeight !== undefined) {
+        setValue('netWeight', product.netWeight);
+        setValue('grossWeight', product.grossWeight || product.netWeight);
+        setValue('hasStones', product.hasStones || false);
+        setValue('stoneDetails', product.stoneDetails || '');
+      } else if (product.weight !== undefined) {
+        setValue('netWeight', product.weight);
+        setValue('grossWeight', product.weight);
+        setValue('hasStones', false);
+        setValue('stoneDetails', '');
+      } else {
+        setValue('netWeight', '');
+        setValue('grossWeight', '');
+        setValue('hasStones', false);
+        setValue('stoneDetails', '');
+      }
+      
       setValue('description', product.description || '');
       setValue('category', product.category || '');
       setValue('image', product.image || '');
@@ -231,7 +225,10 @@ const Products = () => {
         hoid: '',
         metalType: tabValue === 0 ? 'gold' : 'silver',
         purity: '',
-        weight: '',
+        netWeight: '',
+        grossWeight: '',
+        hasStones: false,
+        stoneDetails: '',
         description: '',
         category: '',
         image: '',
@@ -312,213 +309,69 @@ const Products = () => {
   // Handle form submission
   const onSubmit = async (data) => {
     try {
-      // Check network status
       const online = await getNetworkStatus();
       setIsOffline(!online);
       
+      if (!online) {
+        setSnackbar({
+          open: true,
+          message: 'Cannot add product while offline',
+          severity: 'warning'
+        });
+        return;
+      }
+      
       if (selectedProduct) {
         // Update existing product
-        if (online) {
-          // If online, update via API
-          const response = await api.put(`/api/products/${selectedProduct._id}`, data);
+        const response = await api.put(`/api/products/${selectedProduct._id}`, data);
+        
+        if (response.data.success) {
+          setSnackbar({
+            open: true,
+            message: 'Product updated successfully',
+            severity: 'success'
+          });
           
-          if (response.data.success) {
-            setSnackbar({
-              open: true,
-              message: 'Product updated successfully',
-              severity: 'success'
-            });
-            
-            // Update local state
-            setProducts(prevProducts => 
-              prevProducts.map(product => 
-                product._id === selectedProduct._id ? response.data.data : product
-              )
-            );
-            
-            // Update in IndexedDB
-            if (db) {
-              try {
-                await db.products.put({
-                  ...response.data.data,
-                  id: selectedProduct.id // Keep the local ID
-                });
-              } catch (error) {
-                console.error('Error updating product in IndexedDB:', error);
-                
-                // Handle database corruption
-                if (error.name === 'DatabaseClosedError' || 
-                    error.message.includes('Internal error opening backing store')) {
-                  if (resetDatabase) {
-                    await resetDatabase();
-                    setSnackbar({
-                      open: true,
-                      message: 'Database has been reset due to corruption. Please refresh the page.',
-                      severity: 'warning'
-                    });
-                  }
-                }
-              }
-            }
-          }
-        } else {
-          // If offline, update locally in IndexedDB
-          if (db) {
-            try {
-              const updatedProduct = {
-                ...selectedProduct,
-                ...data,
-                updatedAt: new Date()
-              };
-              
-              await db.products.put(updatedProduct);
-              
-              // Update local state
-              setProducts(prevProducts => 
-                prevProducts.map(product => 
-                  product._id === selectedProduct._id ? updatedProduct : product
-                )
-              );
-              
-              setSnackbar({
-                open: true,
-                message: 'Product updated locally. Will sync when online.',
-                severity: 'success'
-              });
-            } catch (error) {
-              console.error('Error updating product in IndexedDB:', error);
-              
-              // Handle database corruption
-              if (error.name === 'DatabaseClosedError' || 
-                  error.message.includes('Internal error opening backing store')) {
-                if (resetDatabase) {
-                  await resetDatabase();
-                  setSnackbar({
-                    open: true,
-                    message: 'Database has been reset due to corruption. Please refresh the page.',
-                    severity: 'warning'
-                  });
-                }
-              } else {
-                setSnackbar({
-                  open: true,
-                  message: 'Failed to update product locally',
-                  severity: 'error'
-                });
-              }
-            }
-          }
+          // Update the product in the local state
+          setProducts(prevProducts => 
+            prevProducts.map(p => 
+              p._id === selectedProduct._id ? response.data.data : p
+            )
+          );
+          
+          handleCloseDialog();
         }
       } else {
         // Create new product
-        if (online) {
-          // If online, create via API
-          const response = await api.post('/api/products', data);
+        const response = await api.post('/api/products', data);
+        
+        if (response.data.success) {
+          setSnackbar({
+            open: true,
+            message: 'Product added successfully',
+            severity: 'success'
+          });
           
-          if (response.data.success) {
-            setSnackbar({
-              open: true,
-              message: 'Product added successfully',
-              severity: 'success'
-            });
-            
-            const newProduct = response.data.data;
-            
-            // Update local state if the new product matches the current tab
-            if (
-              (tabValue === 0 && data.metalType === 'gold') || 
-              (tabValue === 1 && data.metalType === 'silver')
-            ) {
-              setProducts(prevProducts => [...prevProducts, newProduct]);
-            }
-            
-            // Add to IndexedDB
-            if (db) {
-              try {
-                await db.products.add(newProduct);
-              } catch (error) {
-                console.error('Error adding product to IndexedDB:', error);
-                
-                // Handle database corruption
-                if (error.name === 'DatabaseClosedError' || 
-                    error.message.includes('Internal error opening backing store')) {
-                  if (resetDatabase) {
-                    await resetDatabase();
-                    setSnackbar({
-                      open: true,
-                      message: 'Database has been reset due to corruption. Please refresh the page.',
-                      severity: 'warning'
-                    });
-                  }
-                }
-              }
-            }
+          const newProduct = response.data.data;
+          
+          // Update local state if the new product matches the current tab
+          if (
+            (tabValue === 0 && data.metalType === 'gold') || 
+            (tabValue === 1 && data.metalType === 'silver')
+          ) {
+            setProducts(prevProducts => [...prevProducts, newProduct]);
           }
-        } else {
-          // If offline, create locally in IndexedDB
-          if (db) {
-            try {
-              const tempId = 'local_' + Date.now();
-              const newProduct = {
-                _id: tempId,
-                ...data,
-                createdAt: new Date()
-              };
-              
-              // Add to IndexedDB
-              const id = await db.products.add(newProduct);
-              
-              // Get the product with the generated id
-              const savedProduct = await db.products.get(id);
-              
-              // Update local state if the new product matches the current tab
-              if (
-                (tabValue === 0 && data.metalType === 'gold') || 
-                (tabValue === 1 && data.metalType === 'silver')
-              ) {
-                setProducts(prevProducts => [...prevProducts, savedProduct]);
-              }
-              
-              setSnackbar({
-                open: true,
-                message: 'Product added locally. Will sync when online.',
-                severity: 'success'
-              });
-            } catch (error) {
-              console.error('Error adding product to IndexedDB:', error);
-              
-              // Handle database corruption
-              if (error.name === 'DatabaseClosedError' || 
-                  error.message.includes('Internal error opening backing store')) {
-                if (resetDatabase) {
-                  await resetDatabase();
-                  setSnackbar({
-                    open: true,
-                    message: 'Database has been reset due to corruption. Please refresh the page.',
-                    severity: 'warning'
-                  });
-                  return;
-                }
-              }
-              
-              setSnackbar({
-                open: true,
-                message: 'Failed to add product locally',
-                severity: 'error'
-              });
-            }
-          }
+          
+          handleCloseDialog();
         }
       }
       
-      handleCloseDialog();
       fetchProducts(); // Refresh the data
     } catch (error) {
       console.error('Error saving product:', error);
-      
       setSnackbar({
         open: true,
-        message: `Error: ${error.response?.data?.message || error.message || 'Failed to save product'}`,
+        message: 'Failed to save product',
         severity: 'error'
       });
     }
@@ -585,7 +438,8 @@ const Products = () => {
               <TableCell>Name</TableCell>
               <TableCell>Metal</TableCell>
               <TableCell>Purity</TableCell>
-              <TableCell>Weight (g)</TableCell>
+              <TableCell>Net Weight (g)</TableCell>
+              <TableCell>Gross Weight (g)</TableCell>
               <TableCell>Category</TableCell>
               <TableCell>Stock</TableCell>
               <TableCell>Actions</TableCell>
@@ -604,7 +458,8 @@ const Products = () => {
                   />
                 </TableCell>
                 <TableCell>{product.purity}</TableCell>
-                <TableCell>{typeof product.weight === 'number' ? product.weight.toFixed(3) : Number(product.weight).toFixed(3) || '0.000'} g</TableCell>
+                <TableCell>{product.netWeight?.toFixed(3) || (product.weight?.toFixed(3) || '0.000')}</TableCell>
+                <TableCell>{product.grossWeight?.toFixed(3) || (product.weight?.toFixed(3) || '0.000')}</TableCell>
                 <TableCell>{product.category || '-'}</TableCell>
                 <TableCell>{product.currentStock}</TableCell>
                 <TableCell>
@@ -685,7 +540,12 @@ const Products = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2">
-                      Weight: {typeof product.weight === 'number' ? product.weight.toFixed(3) : Number(product.weight).toFixed(3) || '0.000'} g
+                      Net: {product.netWeight?.toFixed(3) || (product.weight?.toFixed(3) || '0.000')}g
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2">
+                      Gross: {product.grossWeight?.toFixed(3) || (product.weight?.toFixed(3) || '0.000')}g
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -694,6 +554,12 @@ const Products = () => {
                     </Typography>
                   </Grid>
                 </Grid>
+                <Typography variant="subtitle2" color="text.secondary" style={{ marginTop: 4 }}>
+                  Type: {product.metalType} | Purity: {product.purity}
+                </Typography>
+                {product.hasStones && (
+                  <Chip size="small" label="Has Stones" color="secondary" style={{ marginTop: 4 }} />
+                )}
               </CardContent>
               <CardActions>
                 <Button 
@@ -872,19 +738,119 @@ const Products = () => {
               
               <Grid item xs={12} md={6}>
                 <Controller
-                  name="weight"
+                  name="netWeight"
                   control={control}
-                  rules={{ required: 'Weight is required' }}
+                  rules={{ required: 'Net weight is required' }}
                   render={({ field, fieldState: { error } }) => (
                     <TextField
                       {...field}
-                      label="Weight (g)"
+                      label="Net Weight (metal only, g)"
                       fullWidth
                       margin="normal"
                       type="number"
                       inputProps={{ min: 0, step: "0.001" }}
                       error={!!error}
                       helperText={error?.message}
+                    />
+                  )}
+                />
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Controller
+                  name="grossWeight"
+                  control={control}
+                  rules={{ required: 'Gross weight is required' }}
+                  render={({ field, fieldState: { error } }) => (
+                    <TextField
+                      {...field}
+                      label="Gross Weight (total, g)"
+                      fullWidth
+                      margin="normal"
+                      type="number"
+                      inputProps={{ min: 0, step: "0.001" }}
+                      error={!!error}
+                      helperText={error?.message}
+                    />
+                  )}
+                />
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Controller
+                  name="hasStones"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value}
+                          onChange={field.onChange}
+                        />
+                      }
+                      label="Has stones/beads?"
+                      style={{ marginTop: 16 }}
+                    />
+                  )}
+                />
+              </Grid>
+              
+              {watchHasStones && (
+                <Grid item xs={12}>
+                  <Controller
+                    name="stoneDetails"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Stone/Bead Details"
+                        fullWidth
+                        multiline
+                        rows={2}
+                        placeholder="Enter details about stones or beads used"
+                      />
+                    )}
+                  />
+                </Grid>
+              )}
+              
+              {watchHasStones && (
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="stonePrice"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Stone/Bead Price"
+                        fullWidth
+                        type="number"
+                        InputProps={{
+                          startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                        }}
+                        placeholder="Enter the price of stones/beads"
+                      />
+                    )}
+                  />
+                </Grid>
+              )}
+              
+              <Grid item xs={12} md={6}>
+                <Controller
+                  name="makingChargesPercentage"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Making Charges (%)"
+                      fullWidth
+                      margin="normal"
+                      type="number"
+                      InputProps={{
+                        endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                      }}
+                      inputProps={{ min: 0, step: 0.1 }}
+                      placeholder="Default making charges percentage"
                     />
                   )}
                 />

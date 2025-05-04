@@ -1,25 +1,12 @@
 const mongoose = require('mongoose');
 
-const purchaseItemSchema = new mongoose.Schema({
-  product: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-    required: true
-  },
-  name: {
-    type: String,
-    required: true
-  },
-  hoid: {
-    type: String,
-    required: true
-  },
+const goldPurchaseItemSchema = new mongoose.Schema({
   metalType: {
     type: String,
     required: true,
     enum: ['gold', 'silver']
   },
-  purity: {
+  description: {
     type: String,
     required: true
   },
@@ -28,34 +15,37 @@ const purchaseItemSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  quantity: {
-    type: Number,
+  purity: {
+    type: Number, // Purity in percentage (0-100)
     required: true,
-    min: 1,
-    default: 1
+    min: 0,
+    max: 100
+  },
+  karatPurity: {
+    type: String, // Karat purity (e.g., "22K", "24K")
+    required: true
   },
   pricePerGram: {
     type: Number,
     required: true,
     min: 0
   },
-  makingCharges: {
-    type: Number,
-    min: 0,
-    default: 0
-  },
-  totalPrice: {
+  totalAmount: {
     type: Number,
     required: true,
     min: 0
+  },
+  notes: {
+    type: String,
+    trim: true
   }
 });
 
-const purchaseSchema = new mongoose.Schema(
+const goldPurchaseSchema = new mongoose.Schema(
   {
-    invoiceNumber: {
+    referenceNumber: {
       type: String,
-      required: [true, 'Invoice number is required'],
+      required: [true, 'Reference number is required'],
       unique: true,
       trim: true
     },
@@ -64,20 +54,10 @@ const purchaseSchema = new mongoose.Schema(
       ref: 'Customer',
       required: [true, 'Customer reference is required']
     },
-    items: [purchaseItemSchema],
-    subtotal: {
+    items: [goldPurchaseItemSchema],
+    totalWeight: {
       type: Number,
       required: true,
-      min: 0
-    },
-    discount: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    gst: {
-      type: Number,
-      default: 0,
       min: 0
     },
     totalAmount: {
@@ -87,7 +67,7 @@ const purchaseSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'upi', 'bank transfer', 'other'],
+      enum: ['cash', 'bank transfer', 'cheque', 'other'],
       default: 'cash'
     },
     paymentStatus: {
@@ -99,7 +79,7 @@ const purchaseSchema = new mongoose.Schema(
       type: String,
       trim: true
     },
-    soldBy: {
+    processedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User reference is required']
@@ -119,17 +99,27 @@ const purchaseSchema = new mongoose.Schema(
 );
 
 // Create indexes for searching and filtering
-purchaseSchema.index({ invoiceNumber: 1 });
-purchaseSchema.index({ customer: 1 });
-purchaseSchema.index({ createdAt: 1 });
-purchaseSchema.index({ 'items.metalType': 1 });
+goldPurchaseSchema.index({ referenceNumber: 1 });
+goldPurchaseSchema.index({ customer: 1 });
+goldPurchaseSchema.index({ createdAt: 1 });
+goldPurchaseSchema.index({ 'items.metalType': 1 });
+
+// Pre-save hook to calculate total weight and amount
+goldPurchaseSchema.pre('save', function(next) {
+  if (this.items && this.items.length > 0) {
+    // Calculate total weight and amount
+    this.totalWeight = this.items.reduce((sum, item) => sum + item.weight, 0);
+    this.totalAmount = this.items.reduce((sum, item) => sum + item.totalAmount, 0);
+  }
+  next();
+});
 
 // Method to generate PDF receipt
-purchaseSchema.methods.generateReceipt = async function() {
+goldPurchaseSchema.methods.generateReceipt = async function() {
   // This will be implemented in a utility function
   return null;
 };
 
-const Purchase = mongoose.model('Purchase', purchaseSchema);
+const GoldPurchase = mongoose.model('GoldPurchase', goldPurchaseSchema);
 
-module.exports = Purchase; 
+module.exports = GoldPurchase; 

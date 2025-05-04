@@ -6,12 +6,17 @@ const Customer = require('../models/Customer');
 // GET /api/loans - Get all loans
 router.get('/', async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, customer } = req.query;
     const filter = {};
     
     // Filter by status if provided
     if (status && status !== 'all') {
       filter.status = status;
+    }
+    
+    // Filter by customer if provided
+    if (customer) {
+      filter.customer = customer;
     }
     
     // Find loans and populate customer information

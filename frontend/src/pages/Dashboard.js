@@ -112,7 +112,7 @@ const Dashboard = () => {
     totalSales: 0,
     totalCustomers: 0,
     activeLoans: 0,
-    recentPurchases: [],
+    recentSales: [],
     salesByDay: [],
     salesByMetal: [],
     topProducts: []
@@ -147,17 +147,17 @@ const Dashboard = () => {
         if (db) {
           try {
             // Get data from IndexedDB
-            const purchases = await db.purchases.toArray();
+            const sales = await db.sales.toArray();
             const customers = await db.customers.toArray();
             const loans = await db.loans.toArray();
             
             // Calculate stats
-            const totalSales = purchases.reduce((sum, purchase) => sum + purchase.totalAmount, 0);
+            const totalSales = sales.reduce((sum, sale) => sum + sale.totalAmount, 0);
             const totalCustomers = customers.length;
             const activeLoans = loans.filter(loan => loan.status === 'active').length;
             
-            // Get recent purchases
-            const recentPurchases = purchases
+            // Get recent sales
+            const recentSales = sales
               .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
               .slice(0, 5);
             
@@ -167,12 +167,12 @@ const Dashboard = () => {
             for (let i = 29; i >= 0; i--) {
               const date = subDays(today, i);
               const dateString = format(date, 'yyyy-MM-dd');
-              const dailySales = purchases
-                .filter(purchase => {
-                  const purchaseDate = format(new Date(purchase.createdAt), 'yyyy-MM-dd');
-                  return purchaseDate === dateString;
+              const dailySales = sales
+                .filter(sale => {
+                  const saleDate = format(new Date(sale.createdAt), 'yyyy-MM-dd');
+                  return saleDate === dateString;
                 })
-                .reduce((sum, purchase) => sum + purchase.totalAmount, 0);
+                .reduce((sum, sale) => sum + sale.totalAmount, 0);
               
               salesByDay.push({
                 date: format(date, 'dd/MM'),
@@ -181,17 +181,17 @@ const Dashboard = () => {
             }
             
             // Calculate sales by metal type
-            const goldSales = purchases
-              .filter(purchase => 
-                purchase.items.some(item => item.metalType === 'gold')
+            const goldSales = sales
+              .filter(sale => 
+                sale.items.some(item => item.metalType === 'gold')
               )
-              .reduce((sum, purchase) => sum + purchase.totalAmount, 0);
+              .reduce((sum, sale) => sum + sale.totalAmount, 0);
             
-            const silverSales = purchases
-              .filter(purchase => 
-                purchase.items.some(item => item.metalType === 'silver')
+            const silverSales = sales
+              .filter(sale => 
+                sale.items.some(item => item.metalType === 'silver')
               )
-              .reduce((sum, purchase) => sum + purchase.totalAmount, 0);
+              .reduce((sum, sale) => sum + sale.totalAmount, 0);
             
             const salesByMetal = [
               { name: 'Gold', value: goldSales },
@@ -200,8 +200,8 @@ const Dashboard = () => {
             
             // Calculate top products
             const productMap = new Map();
-            purchases.forEach(purchase => {
-              purchase.items.forEach(item => {
+            sales.forEach(sale => {
+              sale.items.forEach(item => {
                 const key = `${item.name}-${item.metalType}`;
                 if (productMap.has(key)) {
                   productMap.set(key, {
@@ -229,7 +229,7 @@ const Dashboard = () => {
               totalSales,
               totalCustomers,
               activeLoans,
-              recentPurchases,
+              recentSales,
               salesByDay,
               salesByMetal,
               topProducts
@@ -255,9 +255,9 @@ const Dashboard = () => {
     }).format(amount);
   };
 
-  // Navigate to purchases page
-  const navigateToPurchases = () => {
-    navigate('/purchases');
+  // Navigate to sales page
+  const navigateToSales = () => {
+    navigate('/sales');
   };
 
   // Navigate to customers page
@@ -275,9 +275,9 @@ const Dashboard = () => {
     navigate('/prices');
   };
 
-  // Navigate to purchase detail page
-  const navigateToPurchaseDetail = (purchase) => {
-    navigate(`/purchases/${purchase._id}`);
+  // Navigate to sale detail page
+  const navigateToSaleDetail = (sale) => {
+    navigate(`/sales/${sale._id}`);
   };
 
   // Get color for pie chart
@@ -316,7 +316,7 @@ const Dashboard = () => {
             icon={<MonetizationOn />}
             color="primary"
             loading={loading}
-            onClick={navigateToPurchases}
+            onClick={navigateToSales}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -442,16 +442,16 @@ const Dashboard = () => {
         </Grid>
       </Grid>
       
-      {/* Recent Purchases */}
+      {/* Recent Sales */}
       <Paper sx={{ mb: 3 }}>
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">
             <ShoppingBasket fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-            Recent Purchases
+            Recent Sales
           </Typography>
           <Button
             variant="text"
-            onClick={navigateToPurchases}
+            onClick={navigateToSales}
           >
             View All
           </Button>
@@ -461,7 +461,7 @@ const Dashboard = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
             <CircularProgress />
           </Box>
-        ) : stats.recentPurchases.length > 0 ? (
+        ) : stats.recentSales && stats.recentSales.length > 0 ? (
           <TableContainer>
             <Table>
               <TableHead>
@@ -475,20 +475,20 @@ const Dashboard = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {stats.recentPurchases.map((purchase) => (
-                  <TableRow key={purchase._id || purchase.id}>
-                    <TableCell>{purchase.invoiceNumber}</TableCell>
-                    <TableCell>{purchase.customer?.name || 'Unknown'}</TableCell>
-                    <TableCell>{format(new Date(purchase.createdAt), 'dd/MM/yyyy')}</TableCell>
+                {stats.recentSales.map((sale) => (
+                  <TableRow key={sale._id || sale.id}>
+                    <TableCell>{sale.invoiceNumber}</TableCell>
+                    <TableCell>{sale.customer?.name || 'Unknown'}</TableCell>
+                    <TableCell>{format(new Date(sale.createdAt), 'dd/MM/yyyy')}</TableCell>
                     <TableCell align="right">
-                      {formatCurrency(purchase.totalAmount)}
+                      {formatCurrency(sale.totalAmount)}
                     </TableCell>
                     <TableCell>
                       <Chip 
-                        label={purchase.paymentStatus.charAt(0).toUpperCase() + purchase.paymentStatus.slice(1)} 
+                        label={sale.paymentStatus.charAt(0).toUpperCase() + sale.paymentStatus.slice(1)} 
                         color={
-                          purchase.paymentStatus === 'completed' ? 'success' :
-                          purchase.paymentStatus === 'pending' ? 'error' : 'warning'
+                          sale.paymentStatus === 'completed' ? 'success' :
+                          sale.paymentStatus === 'pending' ? 'error' : 'warning'
                         }
                         size="small"
                       />
@@ -497,7 +497,7 @@ const Dashboard = () => {
                       <IconButton 
                         size="small" 
                         color="primary"
-                        onClick={() => navigateToPurchaseDetail(purchase)}
+                        onClick={() => navigateToSaleDetail(sale)}
                       >
                         <Visibility fontSize="small" />
                       </IconButton>
@@ -510,7 +510,7 @@ const Dashboard = () => {
         ) : (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body1" color="text.secondary">
-              No recent purchases found
+              No recent sales found
             </Typography>
           </Box>
         )}

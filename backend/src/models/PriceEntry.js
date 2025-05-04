@@ -18,17 +18,6 @@ const priceEntrySchema = new mongoose.Schema(
       required: [true, 'Price per gram is required'],
       min: 0
     },
-    makingCharges: {
-      type: Number,
-      required: [true, 'Making charges are required'],
-      min: 0,
-      default: 0
-    },
-    gst: {
-      type: Number,
-      min: 0,
-      default: 3 // 3% GST on jewellery
-    },
     otherCharges: {
       type: Number,
       min: 0,
@@ -36,7 +25,6 @@ const priceEntrySchema = new mongoose.Schema(
     },
     finalPricePerGram: {
       type: Number,
-      required: [true, 'Final price per gram is required'],
       min: 0
     },
     effectiveDate: {
@@ -52,12 +40,24 @@ const priceEntrySchema = new mongoose.Schema(
     notes: {
       type: String,
       trim: true
+    },
+    isActive: {
+      type: Boolean,
+      default: true
     }
   },
   {
     timestamps: true
   }
 );
+
+// Pre-save hook to calculate finalPricePerGram
+priceEntrySchema.pre('save', function(next) {
+  // Calculate final price per gram (now just base price + other charges)
+  this.finalPricePerGram = Number(this.pricePerGram) + Number(this.otherCharges || 0);
+  
+  next();
+});
 
 // Create a compound index on metalType, purity, and effectiveDate
 priceEntrySchema.index({ metalType: 1, purity: 1, effectiveDate: 1 });
@@ -67,6 +67,20 @@ priceEntrySchema.statics.getLatestPrice = async function(metalType, purity) {
   return this.findOne({ metalType, purity })
     .sort({ effectiveDate: -1 })
     .exec();
+};
+
+// When a new price is added for a metal type and purity, mark previous entries as inactive
+priceEntrySchema.statics.markPreviousEntriesInactive = async function(metalType, purity) {
+  await this.updateMany(
+    { 
+      metalType, 
+      purity,
+      isActive: true 
+    },
+    { 
+      $set: { isActive: false } 
+    }
+  );
 };
 
 const PriceEntry = mongoose.model('PriceEntry', priceEntrySchema);

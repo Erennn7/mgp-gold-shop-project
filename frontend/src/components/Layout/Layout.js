@@ -35,8 +35,9 @@ import {
   MonetizationOn as PricesIcon,
   Inventory as ProductsIcon,
   People as CustomersIcon,
-  ReceiptLong as PurchasesIcon,
+  ReceiptLong as SalesIcon,
   Money as LoansIcon,
+  SwapHoriz as SwapIcon,
   AccountCircle,
   Sync as SyncIcon,
   SyncProblem as SyncProblemIcon,
@@ -46,7 +47,10 @@ import {
   Storage as StorageIcon,
   RestartAlt as RestartAltIcon,
   Error as ErrorIcon,
-  Logout as LogoutIcon
+  Logout as LogoutIcon,
+  CreditCard as CreditCardIcon,
+  Business as BusinessIcon,
+  LocalShipping as LocalShippingIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../store/AuthContext';
 import { useDatabase } from '../../store/DatabaseContext';
@@ -63,8 +67,12 @@ const navItems = [
   { text: 'Daily Pricing', icon: <PricesIcon />, path: '/prices' },
   { text: 'Products', icon: <ProductsIcon />, path: '/products' },
   { text: 'Customers', icon: <CustomersIcon />, path: '/customers' },
-  { text: 'Purchases', icon: <PurchasesIcon />, path: '/purchases' },
-  { text: 'Loans', icon: <LoansIcon />, path: '/loans' }
+  { text: 'Sales', icon: <SalesIcon />, path: '/sales' },
+  { text: 'Gold Purchases', icon: <SwapIcon />, path: '/gold-purchases' },
+  { text: 'Loans', icon: <LoansIcon />, path: '/loans' },
+  { text: 'Savings Schemes', icon: <CreditCardIcon />, path: '/savings-schemes' },
+  { text: 'Suppliers', icon: <BusinessIcon />, path: '/suppliers' },
+  { text: 'Gold Supplies', icon: <LocalShippingIcon />, path: '/gold-supplies' }
 ];
 
 const Layout = () => {

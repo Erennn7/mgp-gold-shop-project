@@ -1,23 +1,24 @@
 {
-  "name": "mg-potdar-jewellers",
+  "name": "mgp-project",
   "version": "1.0.0",
-  "description": "Jewellery Shop Management System for MG Potdar Jewellers",
+  "description": "MG Potdar Jewellers Management System",
   "main": "index.js",
-  "private": true,
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
   "scripts": {
-    "start:backend": "cd backend && npm run start",
-    "start:frontend": "cd frontend && npm run start",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build:frontend": "cd frontend && npm run build"
+    "start": "npm run dev",
+    "server": "cd backend && npm run dev",
+    "client": "cd frontend && npm start",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "jewelry",
+    "shop",
+    "management"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "morgan": "^1.10.0"
+    "concurrently": "^8.2.2"
   }
 }
