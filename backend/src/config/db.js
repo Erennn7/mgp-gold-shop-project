@@ -11,11 +11,8 @@ const RECONNECT_INTERVAL = 5000; // 5 seconds
 // MongoDB connection function
 const connectDB = async () => {
   try {
-    // Check if we're running in Electron
-    const isElectron = process.env.ELECTRON_RUN === 'true';
-    
-    // Use local MongoDB instance instead of Atlas with placeholder domain
-    const dbURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers';
+    // Use local MongoDB instance
+    const dbURI = 'mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/';
     
     // Connection options to handle deprecation warnings
     const options = {
@@ -29,24 +26,6 @@ const connectDB = async () => {
       retryWrites: true,
       retryReads: true
     };
-    
-    // Create connection log directory if running in Electron
-    if (isElectron) {
-      const appDir = process.env.APPDATA || 
-                    (process.platform === 'darwin' ? 
-                      path.join(process.env.HOME, 'Library', 'Application Support') : 
-                      path.join(process.env.HOME, '.local', 'share'));
-      
-      const logDir = path.join(appDir, 'mg-potdar-jewellers', 'logs');
-      
-      if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-      }
-      
-      // Log connection attempt
-      const logPath = path.join(logDir, 'db-connection.log');
-      fs.appendFileSync(logPath, `${new Date().toISOString()} - Connecting to: ${dbURI.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}\n`);
-    }
     
     console.log('Connecting to MongoDB...');
     console.log('Database URI:', dbURI.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')); // Hide credentials
@@ -132,8 +111,8 @@ const attemptReconnect = () => {
   
   setTimeout(async () => {
     try {
-      // Use local MongoDB for reconnection attempts
-      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers', {
+      const dbURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers';
+      await mongoose.connect(dbURI, {
         useNewUrlParser: true,
         useUnifiedTopology: true
       });
