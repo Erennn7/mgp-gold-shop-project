@@ -3,79 +3,153 @@ const path = require('path');
 const fs = require('fs');
 
 // Create reusable transporter object using SMTP transport
-let transporter = null;
-
-/**
- * Initialize the email transporter
- * @param {Object} config - Email configuration
- * @returns {Object} - Nodemailer transporter
- */
-function initTransporter(config = null) {
-  if (transporter) {
-    return transporter;
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for other ports
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  },
+  tls: {
+    rejectUnauthorized: false // Only use this in development
   }
-  
-  // If no config is provided, use environment variables
-  const emailConfig = config || {
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  };
-  
-  // Create transporter
-  transporter = nodemailer.createTransport(emailConfig);
-  
-  return transporter;
-}
+});
+
+// Verify transporter configuration
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('SMTP Configuration Error:', error);
+  } else {
+    console.log('SMTP Server is ready to take our messages');
+  }
+});
 
 /**
- * Send an email with PDF invoice attachment
- * @param {String} to - Recipient email
- * @param {String} subject - Email subject
- * @param {String} htmlContent - HTML email body
- * @param {String} pdfPath - Path to the PDF file
- * @returns {Promise<Object>} - Email send result
+ * Generate HTML email template for invoice
+ * @param {Object} data - Invoice data
+ * @returns {String} - HTML email template
  */
-async function sendSaleInvoiceEmail(to, subject, htmlContent, pdfPath) {
+const generateInvoiceEmailTemplate = (data) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+          }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .header {
+            text-align: center;
+            padding: 20px 0;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+          }
+          .content {
+            padding: 20px 0;
+          }
+          .footer {
+            text-align: center;
+            padding: 20px 0;
+            font-size: 12px;
+            color: #666;
+          }
+          .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>MG Potdar Jewellers</h1>
+            <p>Your Invoice #${data.invoiceNumber}</p>
+          </div>
+          <div class="content">
+            <p>Dear ${data.customerName},</p>
+            <p>Thank you for your business! Please find attached your invoice #${data.invoiceNumber} for your recent purchase.</p>
+            <p>Invoice Details:</p>
+            <ul>
+              <li>Invoice Number: ${data.invoiceNumber}</li>
+              <li>Date: ${data.saleDate}</li>
+              <li>Amount: ₹${data.amount}</li>
+            </ul>
+            <p>If you have any questions about your invoice, please don't hesitate to contact us.</p>
+            <p>Best regards,<br>MG Potdar Jewellers Team</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated email, please do not reply.</p>
+            <p>MG Potdar Jewellers<br>123 Main Street, Solapur, Maharashtra - 413001<br>Phone: +91 987-654-3210</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+/**
+ * Send sale invoice via email
+ * @param {Object} options - Email options
+ * @param {String} options.to - Recipient email
+ * @param {String} options.subject - Email subject
+ * @param {String} options.text - Plain text content
+ * @param {String} options.html - HTML content
+ * @param {Buffer} options.pdfBuffer - PDF attachment buffer
+ * @param {String} options.filename - PDF filename
+ */
+const sendSaleInvoiceEmail = async (options) => {
   try {
-    // Initialize transporter if not already done
-    if (!transporter) {
-      initTransporter();
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      throw new Error('Email configuration is missing. Please check your .env file.');
     }
-    
-    if (!to) {
-      throw new Error('Recipient email is required');
+
+    if (!options.to) {
+      throw new Error('Recipient email address is required');
     }
-    
-    if (!pdfPath || !fs.existsSync(pdfPath)) {
-      throw new Error('Valid PDF file path is required');
-    }
-    
-    // Prepare email data
+
+    console.log('Attempting to send email to:', options.to);
+    console.log('Using email account:', process.env.EMAIL_USER);
+
     const mailOptions = {
-      from: process.env.EMAIL_FROM || 'MG Potdar Jewellers <no-reply@mgpotdar.com>',
-      to,
-      subject,
-      html: htmlContent,
-      attachments: [{
-        filename: 'invoice.pdf',
-        path: pdfPath,
-        contentType: 'application/pdf'
-      }]
+      from: `"MG Potdar Jewellers" <${process.env.EMAIL_USER}>`,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+      attachments: [
+        {
+          filename: options.filename,
+          content: options.pdfBuffer
+        }
+      ]
     };
-    
-    // Send email
+
     const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.messageId);
     return info;
   } catch (error) {
-    console.error('Error sending sale invoice email:', error);
+    console.error('Error sending email:', error);
+    if (error.code === 'EAUTH') {
+      console.error('Authentication failed. Please check your email credentials.');
+    } else if (error.code === 'ESOCKET') {
+      console.error('Network error. Please check your internet connection.');
+    }
     throw error;
   }
-}
+};
 
 /**
  * Send an email with PDF receipt for gold purchase
@@ -87,11 +161,10 @@ async function sendSaleInvoiceEmail(to, subject, htmlContent, pdfPath) {
  */
 async function sendGoldPurchaseReceipt(to, subject, htmlContent, pdfPath) {
   try {
-    // Initialize transporter if not already done
-    if (!transporter) {
-      initTransporter();
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      throw new Error('Email configuration is missing. Please check your .env file.');
     }
-    
+
     if (!to) {
       throw new Error('Recipient email is required');
     }
@@ -100,9 +173,11 @@ async function sendGoldPurchaseReceipt(to, subject, htmlContent, pdfPath) {
       throw new Error('Valid PDF file path is required');
     }
     
+    console.log('Attempting to send gold purchase receipt to:', to);
+    
     // Prepare email data
     const mailOptions = {
-      from: process.env.EMAIL_FROM || 'MG Potdar Jewellers <no-reply@mgpotdar.com>',
+      from: `"MG Potdar Jewellers" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       html: htmlContent,
@@ -115,9 +190,15 @@ async function sendGoldPurchaseReceipt(to, subject, htmlContent, pdfPath) {
     
     // Send email
     const info = await transporter.sendMail(mailOptions);
+    console.log('Gold purchase receipt email sent successfully:', info.messageId);
     return info;
   } catch (error) {
     console.error('Error sending gold purchase receipt email:', error);
+    if (error.code === 'EAUTH') {
+      console.error('Authentication failed. Please check your email credentials.');
+    } else if (error.code === 'ESOCKET') {
+      console.error('Network error. Please check your internet connection.');
+    }
     throw error;
   }
 }
@@ -304,8 +385,8 @@ function generateReceiptEmailTemplate(data, type = 'sale') {
 }
 
 module.exports = {
-  initTransporter,
   sendSaleInvoiceEmail,
+  generateInvoiceEmailTemplate,
   sendGoldPurchaseReceipt,
   generateReceiptEmailTemplate
 }; 

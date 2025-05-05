@@ -151,7 +151,7 @@ saleSchema.pre('validate', function(next) {
 
 // Method to generate PDF receipt
 saleSchema.methods.generateReceipt = async function() {
-  // This will be implemented in a utility function
+  // This will be implemented in a utility function 
   return null;
 };
 
