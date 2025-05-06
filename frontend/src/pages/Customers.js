@@ -59,7 +59,7 @@ const Customers = () => {
   });
 
   // Get database context
-  const { db, resetDatabase, clearAllTables } = useDatabase();
+  const { db, resetDatabase } = useDatabase();
 
   // Form setup
   const { control, handleSubmit, reset, setValue, formState: { errors } } = useForm({
@@ -90,8 +90,6 @@ const Customers = () => {
       // Check network status
       const online = await getNetworkStatus();
       setIsOffline(!online);
-      console.log('Network status:', online ? 'online' : 'offline');
-      console.log('Current tab value:', tabValue);
 
       if (online) {
         try {
@@ -101,22 +99,9 @@ const Customers = () => {
             endpoint += `?type=${tabValue}`;
           }
           
-          console.log('Fetching customers from API endpoint:', endpoint);
           const response = await api.get(endpoint);
-          
-          console.log('API response:', response.data);
           if (response.data.success) {
-            console.log(`Received ${response.data.data?.length || 0} customers from API`);
             setCustomers(response.data.data || []);
-            
-            // Log customer details
-            response.data.data?.forEach((customer, index) => {
-              console.log(`Customer ${index + 1}:`, {
-                id: customer._id,
-                name: customer.name,
-                phone: customer.phone
-              });
-            });
           }
         } catch (apiError) {
           console.error('API error fetching customers:', apiError);
@@ -399,11 +384,6 @@ const Customers = () => {
       (customer.email && customer.email.toLowerCase().includes(searchStr))
     );
   });
-  
-  console.log(`Original customers: ${customers.length}, Filtered customers: ${filteredCustomers.length}`);
-  if (customers.length !== filteredCustomers.length) {
-    console.log('Search filter is active with term:', searchTerm);
-  }
 
   // Close snackbar
   const handleCloseSnackbar = () => {
@@ -413,85 +393,6 @@ const Customers = () => {
   // View customer details
   const handleViewCustomer = (customer) => {
     navigate(`/customers/${customer._id || customer.id}`);
-  };
-
-  // Force refresh data from server and clear local cache
-  const handleForceRefresh = async () => {
-    setLoading(true);
-    try {
-      console.log('Force refreshing data...');
-      
-      // If database context has clearAllTables function, use it
-      if (clearAllTables) {
-        await clearAllTables();
-        console.log('Database tables cleared');
-      } else if (db) {
-        // Otherwise try to clear customers table directly
-        try {
-          await db.customers.clear();
-          console.log('Customers table cleared');
-        } catch (dbError) {
-          console.error('Error clearing customers table:', dbError);
-        }
-      }
-      
-      // Fetch fresh data from API
-      const online = await getNetworkStatus();
-      
-      if (!online) {
-        setSnackbar({
-          open: true,
-          message: 'You are offline. Cannot refresh data from server.',
-          severity: 'error'
-        });
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Fetching fresh data from API...');
-      let endpoint = '/api/customers';
-      if (tabValue !== 'all') {
-        endpoint += `?type=${tabValue}`;
-      }
-      
-      const response = await api.get(endpoint);
-      
-      if (response.data.success) {
-        console.log(`Received ${response.data.data.length} fresh customers from API`);
-        setCustomers(response.data.data);
-        
-        // Save to IndexedDB
-        if (db) {
-          try {
-            // First clear the table
-            await db.customers.clear();
-            
-            // Then add the fresh data
-            for (const customer of response.data.data) {
-              await db.customers.add(customer);
-            }
-            console.log('IndexedDB updated with fresh data');
-          } catch (dbError) {
-            console.error('Error updating IndexedDB:', dbError);
-          }
-        }
-        
-        setSnackbar({
-          open: true,
-          message: 'Data refreshed successfully',
-          severity: 'success'
-        });
-      }
-    } catch (error) {
-      console.error('Error during force refresh:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to refresh data',
-        severity: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -508,14 +409,6 @@ const Customers = () => {
               You are offline. Some features may be limited.
             </Alert>
           )}
-          <Button 
-            variant="outlined"
-            onClick={handleForceRefresh}
-            sx={{ mr: 2 }}
-            disabled={loading || isOffline}
-          >
-            Force Refresh
-          </Button>
           <Button
             variant="contained"
             startIcon={<Add />}

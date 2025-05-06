@@ -114,40 +114,57 @@ const CustomerDetail = () => {
       setIsOffline(!online);
       
       if (online) {
-        // Fetch customer from API
-        const response = await api.get(`/api/customers/${id}`);
-        if (response.data.success) {
-          setCustomer(response.data.data);
-          
-          // Also fetch related transactions
-          fetchCustomerPurchases(id);
-          fetchCustomerSales(id);
-          fetchCustomerLoans(id);
-          fetchCustomerSavingsSchemes(id);
-        } else {
-          setSnackbar({
-            open: true,
-            message: 'Failed to fetch customer data',
-            severity: 'error'
-          });
+        try {
+          // Fetch customer from API
+          const response = await api.get(`/api/customers/${id}`);
+          if (response.data.success) {
+            setCustomer(response.data.data);
+            
+            // Also fetch related transactions
+            fetchCustomerPurchases(id);
+            fetchCustomerSales(id);
+            fetchCustomerLoans(id);
+            fetchCustomerSavingsSchemes(id);
+          }
+        } catch (apiError) {
+          console.error('API error fetching customer:', apiError);
+          // Try IndexedDB as fallback
+          await fetchFromIndexedDB();
         }
       } else {
-        // User is offline
-        setSnackbar({
-          open: true,
-          message: 'You are offline. Please check your connection.',
-          severity: 'warning'
-        });
+        // If offline, fetch from IndexedDB
+        await fetchFromIndexedDB();
       }
     } catch (error) {
       console.error('Error fetching customer data:', error);
-      setSnackbar({
-        open: true,
-        message: 'Error loading customer information',
-        severity: 'error'
-      });
+      handleDatabaseError(error);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Helper function to fetch from IndexedDB
+  const fetchFromIndexedDB = async () => {
+    if (!db) return;
+    
+    try {
+      // Find customer by _id or id
+      const dbCustomer = await db.customers
+        .filter(c => c._id === id || c.id === id)
+        .first();
+      
+      if (dbCustomer) {
+        setCustomer(dbCustomer);
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'Customer not found in offline database',
+          severity: 'error'
+        });
+      }
+    } catch (dbError) {
+      console.error('IndexedDB error:', dbError);
+      handleDatabaseError(dbError);
     }
   };
   
@@ -338,8 +355,18 @@ const CustomerDetail = () => {
         if (response.data.success) {
           setSavingsSchemes(response.data.data);
         }
-      } else {
-        console.log('Cannot fetch savings schemes while offline');
+      } else if (db) {
+        // If offline, try to get from IndexedDB
+        try {
+          const dbSchemes = await db.savingsSchemes
+            .filter(scheme => scheme.customer === customerId || 
+                             (scheme.customer && scheme.customer._id === customerId))
+            .toArray();
+          
+          setSavingsSchemes(dbSchemes || []);
+        } catch (error) {
+          console.error('Error fetching savings schemes from IndexedDB:', error);
+        }
       }
     } catch (error) {
       console.error('Error fetching customer savings schemes:', error);
@@ -356,8 +383,17 @@ const CustomerDetail = () => {
         if (response.data.success) {
           setPurchases(response.data.data || []);
         }
-      } else {
-        console.log('Cannot fetch purchases while offline');
+      } else if (db) {
+        try {
+          const dbPurchases = await db.goldPurchases
+            .filter(purchase => purchase.customer === customerId || 
+                             (purchase.customer && purchase.customer._id === customerId))
+            .toArray();
+          
+          setPurchases(dbPurchases || []);
+        } catch (error) {
+          console.error('Error fetching purchases from IndexedDB:', error);
+        }
       }
     } catch (error) {
       console.error('Error fetching customer purchases:', error);

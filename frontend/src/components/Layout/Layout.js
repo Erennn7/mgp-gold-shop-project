@@ -48,9 +48,7 @@ import {
   RestartAlt as RestartAltIcon,
   Error as ErrorIcon,
   Logout as LogoutIcon,
-  CreditCard as CreditCardIcon,
-  Business as BusinessIcon,
-  LocalShipping as LocalShippingIcon
+  CreditCard as CreditCardIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../store/AuthContext';
 import { useDatabase } from '../../store/DatabaseContext';
@@ -70,9 +68,7 @@ const navItems = [
   { text: 'Sales', icon: <SalesIcon />, path: '/sales' },
   { text: 'Gold Purchases', icon: <SwapIcon />, path: '/gold-purchases' },
   { text: 'Loans', icon: <LoansIcon />, path: '/loans' },
-  { text: 'Savings Schemes', icon: <CreditCardIcon />, path: '/savings-schemes' },
-  { text: 'Suppliers', icon: <BusinessIcon />, path: '/suppliers' },
-  { text: 'Gold Supplies', icon: <LocalShippingIcon />, path: '/gold-supplies' }
+  { text: 'Savings Schemes', icon: <CreditCardIcon />, path: '/savings-schemes' }
 ];
 
 const Layout = () => {

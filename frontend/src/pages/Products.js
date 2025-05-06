@@ -103,7 +103,7 @@ const Products = () => {
     fetchProducts();
   }, [tabValue]);
 
-  // Function to fetch products from API
+  // Function to fetch products from API or IndexedDB
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -112,7 +112,7 @@ const Products = () => {
       setIsOffline(!online);
 
       if (online) {
-        // Fetch from API
+        // If online, fetch from API
         try {
           const metalType = tabValue === 0 ? 'gold' : 'silver';
           const response = await api.get(`/api/products?metalType=${metalType}`);
@@ -121,29 +121,64 @@ const Products = () => {
           }
         } catch (apiError) {
           console.error('API error fetching products:', apiError);
-          setSnackbar({
-            open: true,
-            message: 'Error fetching products from server',
-            severity: 'error'
-          });
+          // Try IndexedDB as fallback
+          await fetchFromIndexedDB();
         }
       } else {
-        // Show offline message
-        setSnackbar({
-          open: true,
-          message: 'You are offline. Please check your connection.',
-          severity: 'warning'
-        });
+        // If offline, fetch from IndexedDB
+        await fetchFromIndexedDB();
       }
     } catch (error) {
       console.error('Error fetching products:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to fetch products',
-        severity: 'error'
-      });
+      handleDatabaseError(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper function to fetch from IndexedDB
+  const fetchFromIndexedDB = async () => {
+    if (!db) return;
+    
+    try {
+      const metalType = tabValue === 0 ? 'gold' : 'silver';
+      const cachedProducts = await db.products
+        .where('metalType')
+        .equals(metalType)
+        .toArray();
+      setProducts(cachedProducts);
+    } catch (dbError) {
+      console.error('IndexedDB error:', dbError);
+      handleDatabaseError(dbError);
+    }
+  };
+
+  // Helper function to handle database errors
+  const handleDatabaseError = (error) => {
+    if (error && (error.name === 'DatabaseClosedError' || 
+                  error.message.includes('Database has been closed') ||
+                  error.message.includes('Internal error opening backing store'))) {
+      if (resetDatabase) {
+        console.warn('Database is closed or corrupted, attempting to reset...');
+        resetDatabase().then(() => {
+          setSnackbar({
+            open: true,
+            message: 'Database has been reset due to corruption. Refreshing data...',
+            severity: 'warning'
+          });
+          // Wait a moment before trying to fetch again
+          setTimeout(() => {
+            fetchProducts();
+          }, 1000);
+        }).catch(resetError => {
+          console.error('Failed to reset database:', resetError);
+          setSnackbar({
+            open: true,
+            message: 'Failed to reset corrupted database. Please refresh the page.',
+            severity: 'error'
+          });
+        });
+      }
     }
   };
 
@@ -309,69 +344,213 @@ const Products = () => {
   // Handle form submission
   const onSubmit = async (data) => {
     try {
+      // Check network status
       const online = await getNetworkStatus();
       setIsOffline(!online);
       
-      if (!online) {
-        setSnackbar({
-          open: true,
-          message: 'Cannot add product while offline',
-          severity: 'warning'
-        });
-        return;
-      }
-      
       if (selectedProduct) {
         // Update existing product
-        const response = await api.put(`/api/products/${selectedProduct._id}`, data);
-        
-        if (response.data.success) {
-          setSnackbar({
-            open: true,
-            message: 'Product updated successfully',
-            severity: 'success'
-          });
+        if (online) {
+          // If online, update via API
+          const response = await api.put(`/api/products/${selectedProduct._id}`, data);
           
-          // Update the product in the local state
-          setProducts(prevProducts => 
-            prevProducts.map(p => 
-              p._id === selectedProduct._id ? response.data.data : p
-            )
-          );
-          
-          handleCloseDialog();
+          if (response.data.success) {
+            setSnackbar({
+              open: true,
+              message: 'Product updated successfully',
+              severity: 'success'
+            });
+            
+            // Update local state
+            setProducts(prevProducts => 
+              prevProducts.map(product => 
+                product._id === selectedProduct._id ? response.data.data : product
+              )
+            );
+            
+            // Update in IndexedDB
+            if (db) {
+              try {
+                await db.products.put({
+                  ...response.data.data,
+                  id: selectedProduct.id // Keep the local ID
+                });
+              } catch (error) {
+                console.error('Error updating product in IndexedDB:', error);
+                
+                // Handle database corruption
+                if (error.name === 'DatabaseClosedError' || 
+                    error.message.includes('Internal error opening backing store')) {
+                  if (resetDatabase) {
+                    await resetDatabase();
+                    setSnackbar({
+                      open: true,
+                      message: 'Database has been reset due to corruption. Please refresh the page.',
+                      severity: 'warning'
+                    });
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // If offline, update locally in IndexedDB
+          if (db) {
+            try {
+              const updatedProduct = {
+                ...selectedProduct,
+                ...data,
+                updatedAt: new Date()
+              };
+              
+              await db.products.put(updatedProduct);
+              
+              // Update local state
+              setProducts(prevProducts => 
+                prevProducts.map(product => 
+                  product._id === selectedProduct._id ? updatedProduct : product
+                )
+              );
+              
+              setSnackbar({
+                open: true,
+                message: 'Product updated locally. Will sync when online.',
+                severity: 'success'
+              });
+            } catch (error) {
+              console.error('Error updating product in IndexedDB:', error);
+              
+              // Handle database corruption
+              if (error.name === 'DatabaseClosedError' || 
+                  error.message.includes('Internal error opening backing store')) {
+                if (resetDatabase) {
+                  await resetDatabase();
+                  setSnackbar({
+                    open: true,
+                    message: 'Database has been reset due to corruption. Please refresh the page.',
+                    severity: 'warning'
+                  });
+                }
+              } else {
+                setSnackbar({
+                  open: true,
+                  message: 'Failed to update product locally',
+                  severity: 'error'
+                });
+              }
+            }
+          }
         }
       } else {
         // Create new product
-        const response = await api.post('/api/products', data);
-        
-        if (response.data.success) {
-          setSnackbar({
-            open: true,
-            message: 'Product added successfully',
-            severity: 'success'
-          });
+        if (online) {
+          // If online, create via API
+          const response = await api.post('/api/products', data);
           
-          const newProduct = response.data.data;
-          
-          // Update local state if the new product matches the current tab
-          if (
-            (tabValue === 0 && data.metalType === 'gold') || 
-            (tabValue === 1 && data.metalType === 'silver')
-          ) {
-            setProducts(prevProducts => [...prevProducts, newProduct]);
+          if (response.data.success) {
+            setSnackbar({
+              open: true,
+              message: 'Product added successfully',
+              severity: 'success'
+            });
+            
+            const newProduct = response.data.data;
+            
+            // Update local state if the new product matches the current tab
+            if (
+              (tabValue === 0 && data.metalType === 'gold') || 
+              (tabValue === 1 && data.metalType === 'silver')
+            ) {
+              setProducts(prevProducts => [...prevProducts, newProduct]);
+            }
+            
+            // Add to IndexedDB
+            if (db) {
+              try {
+                await db.products.add(newProduct);
+              } catch (error) {
+                console.error('Error adding product to IndexedDB:', error);
+                
+                // Handle database corruption
+                if (error.name === 'DatabaseClosedError' || 
+                    error.message.includes('Internal error opening backing store')) {
+                  if (resetDatabase) {
+                    await resetDatabase();
+                    setSnackbar({
+                      open: true,
+                      message: 'Database has been reset due to corruption. Please refresh the page.',
+                      severity: 'warning'
+                    });
+                  }
+                }
+              }
+            }
           }
-          
-          handleCloseDialog();
+        } else {
+          // If offline, create locally in IndexedDB
+          if (db) {
+            try {
+              const tempId = 'local_' + Date.now();
+              const newProduct = {
+                _id: tempId,
+                ...data,
+                createdAt: new Date()
+              };
+              
+              // Add to IndexedDB
+              const id = await db.products.add(newProduct);
+              
+              // Get the product with the generated id
+              const savedProduct = await db.products.get(id);
+              
+              // Update local state if the new product matches the current tab
+              if (
+                (tabValue === 0 && data.metalType === 'gold') || 
+                (tabValue === 1 && data.metalType === 'silver')
+              ) {
+                setProducts(prevProducts => [...prevProducts, savedProduct]);
+              }
+              
+              setSnackbar({
+                open: true,
+                message: 'Product added locally. Will sync when online.',
+                severity: 'success'
+              });
+            } catch (error) {
+              console.error('Error adding product to IndexedDB:', error);
+              
+              // Handle database corruption
+              if (error.name === 'DatabaseClosedError' || 
+                  error.message.includes('Internal error opening backing store')) {
+                if (resetDatabase) {
+                  await resetDatabase();
+                  setSnackbar({
+                    open: true,
+                    message: 'Database has been reset due to corruption. Please refresh the page.',
+                    severity: 'warning'
+                  });
+                  return;
+                }
+              }
+              
+              setSnackbar({
+                open: true,
+                message: 'Failed to add product locally',
+                severity: 'error'
+              });
+            }
+          }
         }
       }
       
+      handleCloseDialog();
       fetchProducts(); // Refresh the data
     } catch (error) {
       console.error('Error saving product:', error);
+      
       setSnackbar({
         open: true,
-        message: 'Failed to save product',
+        message: `Error: ${error.response?.data?.message || error.message || 'Failed to save product'}`,
         severity: 'error'
       });
     }

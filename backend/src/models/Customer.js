@@ -1,8 +1,5 @@
 const mongoose = require('mongoose');
 
-// Log the MongoDB connection state
-console.log('MongoDB connection state:', mongoose.connection.readyState);
-
 const customerSchema = new mongoose.Schema(
   {
     name: {

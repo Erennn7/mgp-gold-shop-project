@@ -104,8 +104,6 @@ const pricesRoutes = require('./routes/prices');
 const authRoutes = require('./routes/auth');
 const goldPurchasesRoutes = require('./routes/goldPurchases');
 const savingsSchemesRoutes = require('./routes/savingsScheme');
-const suppliersRoutes = require('./routes/suppliers');
-const goldSuppliesRoutes = require('./routes/goldSupplies');
 
 // Mount routes
 app.use('/api/products', productsRoutes);
@@ -117,8 +115,6 @@ app.use('/api/prices', pricesRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/gold-purchases', goldPurchasesRoutes);
 app.use('/api/savings-schemes', savingsSchemesRoutes);
-app.use('/api/suppliers', suppliersRoutes);
-app.use('/api/gold-supplies', goldSuppliesRoutes);
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, '../public')));
@@ -145,10 +141,9 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 5002; // Using port 5002 to avoid conflicts
+const PORT = process.env.PORT || 5001; // Default port is 5001 to avoid conflicts
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`API is available at http://localhost:${PORT}/api`);
 });
 
 module.exports = app; 

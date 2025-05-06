@@ -26,12 +26,6 @@ import Profile from './pages/Profile';
 import SavingsSchemes from './pages/SavingsSchemes';
 import NewSavingsScheme from './pages/NewSavingsScheme';
 import SavingsSchemeDetail from './pages/SavingsSchemeDetail';
-import Suppliers from './pages/Suppliers';
-import GoldSupplies from './pages/GoldSupplies';
-import SupplierDetail from './pages/SupplierDetail';
-import NewSupplier from './pages/NewSupplier';
-import NewGoldSupply from './pages/NewGoldSupply';
-import GoldSupplyDetail from './pages/GoldSupplyDetail';
 
 // Loading component
 const LoadingComponent = () => {
@@ -84,72 +78,41 @@ function App() {
     initApp();
   }, [initialize]);
   
-  // Force delete the IndexedDB database when app loads
-  useEffect(() => {
-    // Delete IndexedDB on app start
-    if (window.indexedDB) {
-      try {
-        console.log('Removing IndexedDB database...');
-        // Set flag to allow deletion
-        window.userInitiatedDatabaseDeletion = true;
-        const deleteRequest = window.indexedDB.deleteDatabase('JewelleryShopDB');
-        
-        deleteRequest.onsuccess = () => {
-          console.log('IndexedDB database successfully deleted');
-        };
-        
-        deleteRequest.onerror = (event) => {
-          console.error('Error deleting IndexedDB database:', event);
-        };
-      } catch (error) {
-        console.error('Exception trying to delete IndexedDB:', error);
-      } finally {
-        window.userInitiatedDatabaseDeletion = false;
-      }
-    }
-  }, []);
-  
   if (!isAppReady || isLoading) {
     return <LoadingComponent />;
   }
   
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="prices" element={<Prices />} />
-        <Route path="products" element={<Products />} />
-        <Route path="customers" element={<Customers />} />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="prices" element={<Prices />} />
+          <Route path="products" element={<Products />} />
+          <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="sales" element={<Sales />} />
         <Route path="sales/new" element={<NewSale />} />
         <Route path="sales/:id" element={<SaleDetail />} />
-        <Route path="loans" element={<Loans />} />
+          <Route path="loans" element={<Loans />} />
         <Route path="gold-purchases" element={<GoldPurchases />} />
         <Route path="gold-purchases/new" element={<NewGoldPurchase />} />
         <Route path="gold-purchases/:id" element={<GoldPurchaseDetail />} />
         <Route path="savings-schemes" element={<SavingsSchemes />} />
         <Route path="savings-schemes/new" element={<NewSavingsScheme />} />
         <Route path="savings-schemes/:id" element={<SavingsSchemeDetail />} />
-        <Route path="suppliers" element={<Suppliers />} />
-        <Route path="suppliers/new" element={<NewSupplier />} />
-        <Route path="suppliers/:id" element={<SupplierDetail />} />
-        <Route path="gold-supplies" element={<GoldSupplies />} />
-        <Route path="gold-supplies/new" element={<NewGoldSupply />} />
-        <Route path="gold-supplies/:id" element={<GoldSupplyDetail />} />
-      </Route>
-      
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        </Route>
+        
+        <Route path="*" element={<NotFound />} />
+      </Routes>
   );
 }
 

@@ -2,59 +2,67 @@ import axios from 'axios';
 import { getNetworkStatus } from './networkStatus';
 
 // Get the base URL from environment variables or use a default
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5002';
-console.log('API base URL configured as:', API_BASE_URL);
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
-// Create an axios instance with base configuration
+// Create an instance with defaults
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // 15 seconds timeout
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// Add request interceptor for authentication
+// Add request interceptor to handle offline mode
 api.interceptors.request.use(
-  config => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+  (config) => {
+    // Check if we're online
+    if (!navigator.onLine) {
+      // Return a rejected promise with a specific error for offline mode
+      return Promise.reject({
+        isOffline: true,
+        message: 'You are currently offline'
+      });
     }
     return config;
   },
-  error => {
-    console.error('Request error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Add response interceptor for error handling
+// Add response interceptor to handle errors
 api.interceptors.response.use(
-  response => response,
-  error => {
+  (response) => response,
+  (error) => {
+    // Special handling for offline rejection
+    if (error.isOffline) {
+      return Promise.reject(error);
+    }
+    
+    // Network error
+    if (error.message === 'Network Error') {
+      console.error('Network error detected');
+      return Promise.reject({
+        isOffline: true,
+        message: 'Network connection error'
+      });
+    }
+    
+    // Server errors
     if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      console.error('API error response:', error.response.status, error.response.data);
-      
-      // Handle authentication errors
-      if (error.response.status === 401) {
-        console.log('Authentication error, redirecting to login');
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        // Optionally redirect to login
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-      }
+      // The request was made and the server responded with a status code outside the 2xx range
+      console.error('Server error:', error.response.status, error.response.data);
     } else if (error.request) {
       // The request was made but no response was received
-      console.error('Network error detected');
+      console.error('No response received:', error.request);
+      return Promise.reject({
+        isOffline: true,
+        message: 'No response from server'
+      });
     } else {
-      // Something happened in setting up the request that triggered an error
-      console.error('API error:', error.message);
+      // Something happened in setting up the request
+      console.error('Request error:', error.message);
     }
+    
     return Promise.reject(error);
   }
 );
