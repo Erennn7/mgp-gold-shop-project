@@ -15,7 +15,7 @@ const connectDB = async () => {
     const isElectron = process.env.ELECTRON_RUN === 'true';
     
     // Use MongoDB Atlas URI or local MongoDB server
-    const dbURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers';
+    const dbURI ='mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/' ;
     
     // If we're in development and not in Electron, try local connection first
     const isDev = process.env.NODE_ENV === 'development';

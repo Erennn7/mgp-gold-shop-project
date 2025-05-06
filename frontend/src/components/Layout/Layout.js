@@ -26,7 +26,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  Button
+  Button,
+  Fab
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -48,13 +49,17 @@ import {
   RestartAlt as RestartAltIcon,
   Error as ErrorIcon,
   Logout as LogoutIcon,
-  CreditCard as CreditCardIcon
+  CreditCard as CreditCardIcon,
+  Business as BusinessIcon,
+  LocalShipping as LocalShippingIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../store/AuthContext';
 import { useDatabase } from '../../store/DatabaseContext';
 import { getNetworkStatus, addNetworkStatusListener } from '../../utils/networkStatus';
 import MongoDBConfigDialog from './MongoDBConfigDialog';
 import ResetDatabaseDialog from './ResetDatabaseDialog';
+import Calculator from '../Calculator/Calculator';
 
 // Drawer width
 const drawerWidth = 240;
@@ -68,7 +73,9 @@ const navItems = [
   { text: 'Sales', icon: <SalesIcon />, path: '/sales' },
   { text: 'Gold Purchases', icon: <SwapIcon />, path: '/gold-purchases' },
   { text: 'Loans', icon: <LoansIcon />, path: '/loans' },
-  { text: 'Savings Schemes', icon: <CreditCardIcon />, path: '/savings-schemes' }
+  { text: 'Savings Schemes', icon: <CreditCardIcon />, path: '/savings-schemes' },
+  { text: 'Suppliers', icon: <BusinessIcon />, path: '/suppliers' },
+  { text: 'Gold Supplies', icon: <LocalShippingIcon />, path: '/gold-supplies' }
 ];
 
 const Layout = () => {
@@ -85,6 +92,7 @@ const Layout = () => {
   const [isOnline, setIsOnline] = useState(true);
   const [mongoDBDialogOpen, setMongoDBDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
   
   const userMenuOpen = Boolean(anchorEl);
 
@@ -251,7 +259,7 @@ const Layout = () => {
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {/* App Bar */}
       <AppBar
         position="fixed"
@@ -399,11 +407,30 @@ const Layout = () => {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),
+          minHeight: '100vh',
+          backgroundColor: 'background.default'
         }}
       >
         <Toolbar /> {/* Spacer for fixed app bar */}
         <Outlet />
       </Box>
+      
+      {/* Calculator Button */}
+      <Tooltip title="Calculator" placement="left">
+        <Fab
+          color="primary"
+          aria-label="calculator"
+          onClick={() => setCalculatorOpen(true)}
+          sx={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            zIndex: 1000
+          }}
+        >
+          <CalculateIcon />
+        </Fab>
+      </Tooltip>
       
       {/* MongoDB Config Dialog */}
       <MongoDBConfigDialog 
@@ -441,6 +468,12 @@ const Layout = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Calculator Dialog */}
+      <Calculator
+        open={calculatorOpen}
+        onClose={() => setCalculatorOpen(false)}
+      />
     </Box>
   );
 };
