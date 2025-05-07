@@ -18,7 +18,7 @@ class JewelleryShopDB extends Dexie {
       customers: '++id, _id, name, phone, email, _modified, _isNew, _deleted',
       sales: '++id, _id, invoiceNumber, customer, createdAt, _modified, _isNew, _deleted',
       loans: '++id, _id, customer, loanNumber, startDate, status, _modified, _isNew, _deleted',
-      goldPurchases: '++id, _id, referenceNumber, customer, createdAt, totalWeight, totalAmount, _modified, _isNew, _deleted',
+      goldPurchases: '++id, _id, referenceNumber, customer, createdAt, _modified, _isNew, _deleted',
       syncQueue: '++id, url, method, data, timestamp, retryCount, entityType, entityId'
     });
     
@@ -30,6 +30,7 @@ class JewelleryShopDB extends Dexie {
       sales: '++id, _id, invoiceNumber, customer, createdAt, _modified, _isNew, _deleted',
       loans: '++id, _id, customer, loanNumber, startDate, status, _modified, _isNew, _deleted',
       goldPurchases: '++id, _id, referenceNumber, customer, createdAt, _modified, _isNew, _deleted',
+      goldSupplies: '++id, _id, referenceNumber, supplier, createdAt, totalWeight, totalAmount, _modified, _isNew, _deleted',
       syncQueue: '++id, url, method, data, timestamp, retryCount, entityType, entityId'
     }).upgrade(tx => {
       // Migrate weight to netWeight/grossWeight
@@ -46,6 +47,18 @@ class JewelleryShopDB extends Dexie {
       });
     });
     
+    // Define database schema v5 with goldSupplies table
+    this.version(5).stores({
+      products: '++id, _id, hoid, name, metalType, purity, netWeight, grossWeight, hasStones, stonePrice, _modified, _isNew, _deleted',
+      prices: '++id, _id, metalType, purity, effectiveDate, _modified, _isNew, _deleted',
+      customers: '++id, _id, name, phone, email, _modified, _isNew, _deleted',
+      sales: '++id, _id, invoiceNumber, customer, createdAt, _modified, _isNew, _deleted',
+      loans: '++id, _id, customer, loanNumber, startDate, status, _modified, _isNew, _deleted',
+      goldPurchases: '++id, _id, referenceNumber, customer, createdAt, _modified, _isNew, _deleted',
+      goldSupplies: '++id, _id, referenceNumber, supplier, createdAt, totalWeight, totalAmount, _modified, _isNew, _deleted',
+      syncQueue: '++id, url, method, data, timestamp, retryCount, entityType, entityId'
+    });
+    
     // Define tables
     this.products = this.table('products');
     this.prices = this.table('prices');
@@ -53,6 +66,7 @@ class JewelleryShopDB extends Dexie {
     this.sales = this.table('sales');
     this.loans = this.table('loans');
     this.goldPurchases = this.table('goldPurchases');
+    this.goldSupplies = this.table('goldSupplies');
     this.syncQueue = this.table('syncQueue');
     
     // Sync interval in milliseconds
@@ -133,11 +147,6 @@ class JewelleryShopDB extends Dexie {
   
   // Safe method to query data without using IDBKeyRange
   async safeQuery(tableName, field, value) {
-    if (!this.isValidKey(value)) {
-      console.warn(`Invalid key detected for field ${field}: `, value);
-      return [];
-    }
-    
     try {
       const table = this.table(tableName);
       return await table.where(field).equals(value).toArray();
@@ -176,12 +185,8 @@ class JewelleryShopDB extends Dexie {
   
   // Get item by _id safely
   async getById(tableName, id) {
-    if (!this.isValidKey(id)) {
-      console.warn(`Invalid ID for ${tableName}: ${id}`);
-      return null;
-    }
-    
     try {
+      // Skip validation and just try to handle errors gracefully
       const items = await this.safeQuery(tableName, '_id', id);
       return items.length > 0 ? items[0] : null;
     } catch (error) {
@@ -219,11 +224,7 @@ class JewelleryShopDB extends Dexie {
   // Helper method to safely query the database with error handling
   async tryQuery(tableName, keyName, keyValue) {
     try {
-      if (!this.isValidKey(keyValue)) {
-        console.warn(`Skipping query with invalid key ${keyValue} for ${tableName}.${keyName}`);
-        return null;
-      }
-      
+      // Skip validation and just try to handle errors gracefully
       const table = this.table(tableName);
       return await table.where(keyName).equals(keyValue).first();
     } catch (error) {
@@ -816,7 +817,8 @@ const performFullSync = async (db) => {
       { name: 'sales', endpoint: '/api/sales' },
       { name: 'prices', endpoint: '/api/prices?metalType=gold' },
       { name: 'prices', endpoint: '/api/prices?metalType=silver', params: { metalType: 'silver' } },
-      { name: 'goldPurchases', endpoint: '/api/gold-purchases' }
+      { name: 'goldPurchases', endpoint: '/api/gold-purchases' },
+      { name: 'goldSupplies', endpoint: '/api/gold-supplies' }
     ];
 
     // Fetch and store data for each collection
@@ -861,4 +863,4 @@ const performFullSync = async (db) => {
     console.error('Error during full sync:', error);
     return false;
   }
-}; 
+};

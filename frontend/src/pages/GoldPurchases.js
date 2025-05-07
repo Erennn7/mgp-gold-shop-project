@@ -60,55 +60,42 @@ const GoldPurchases = () => {
         // Try to fetch from IndexedDB first if available
         if (db && !dbLoading) {
           try {
-            // Clear any cached data
+            // Use a safer method to get all purchases
             console.log('Fetching gold purchases from IndexedDB');
-            const localPurchases = await db.goldPurchases.toArray();
             
-            // If we have local data, use it
-            if (localPurchases && localPurchases.length > 0) {
-              console.log('Found gold purchases in local database:', localPurchases.length, localPurchases);
+            // Use a try-catch block for the database operation
+            try {
+              const localPurchases = await db.goldPurchases.toArray();
               
-              // Get customer details for each purchase
-              const purchasesWithCustomers = await Promise.all(
-                localPurchases.map(async (purchase) => {
-                  try {
-                    if (purchase.customer) {
-                      const customer = await db.customers
-                        .where('_id')
-                        .equals(purchase.customer)
-                        .first();
-                      
-                      return {
-                        ...purchase,
-                        customer: customer || { name: 'Unknown Customer' }
-                      };
-                    }
-                    return purchase;
-                  } catch (err) {
-                    console.error('Error processing purchase:', err);
-                    return purchase;
-                  }
-                })
-              );
+              // Process purchases to ensure they have all required fields
+              const processedPurchases = localPurchases.map(purchase => {
+                // Ensure the purchase has all required fields
+                return {
+                  ...purchase,
+                  // Set default values for any missing fields
+                  items: purchase.items || [],
+                  totalWeight: purchase.totalWeight || 0,
+                  totalAmount: purchase.totalAmount || 0,
+                  paymentMethod: purchase.paymentMethod || 'cash',
+                  paymentStatus: purchase.paymentStatus || 'completed'
+                };
+              });
               
-              // Sort by creation date (newest first)
-              const sortedPurchases = purchasesWithCustomers.sort((a, b) => 
-                new Date(b.createdAt) - new Date(a.createdAt)
-              );
-              
-              setPurchases(sortedPurchases);
+              setPurchases(processedPurchases);
               setLoading(false);
               return;
-            } else {
-              console.log('No gold purchases found in local database');
+            } catch (dbError) {
+              console.error('Error fetching from IndexedDB:', dbError);
+              // Continue to mock data if database fetch fails
             }
-          } catch (dbError) {
-            console.error('Error fetching from local database:', dbError);
-            // Continue with mock data if local fetch fails
+          } catch (error) {
+            console.error('Error accessing database:', error);
+            // Continue to mock data
           }
         }
         
-        // Fallback to mock data if no local data available or fetch failed
+        // If we get here, either there's no database or there was an error
+        // Use mock data as fallback
         console.log('Using mock gold purchases data');
         const mockPurchases = [
           {
@@ -505,4 +492,4 @@ const GoldPurchases = () => {
   );
 };
 
-export default GoldPurchases; 
+export default GoldPurchases;

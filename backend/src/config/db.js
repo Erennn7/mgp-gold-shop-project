@@ -15,8 +15,8 @@ const connectDB = async () => {
     const isElectron = process.env.ELECTRON_RUN === 'true';
     
     // Use MongoDB Atlas URI or local MongoDB server
-    const dbURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers';
-    
+    const dbURI = 'mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/'
+
     // If we're in development and not in Electron, try local connection first
     const isDev = process.env.NODE_ENV === 'development';
     const useLocalFirst = isDev && !isElectron;
@@ -61,7 +61,7 @@ const connectDB = async () => {
     if (useLocalFirst) {
       // In development, try local MongoDB first
       try {
-        conn = await mongoose.connect('mongodb://localhost:27017/mg-potdar-jewellers', options);
+        conn = await mongoose.connect('mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/', options);
         console.log('Connected to local MongoDB');
       } catch (localError) {
         console.log('Local MongoDB connection failed, trying Atlas...');
@@ -141,7 +141,7 @@ const attemptReconnect = () => {
   
   setTimeout(async () => {
     try {
-      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mg-potdar-jewellers', {
+      await mongoose.connect('mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/' , {
         useNewUrlParser: true,
         useUnifiedTopology: true
       });

@@ -61,16 +61,15 @@ const NewGoldPurchase = () => {
     items: [{
       id: uuidv4(),
       metalType: 'gold',
-      description: '',
+      description: 'Gold Item', // Add default description here
       netWeight: 0,
       grossWeight: 0,
       purity: 0, // percentage purity
       karatPurity: '22K', // karat purity
       pricePerGram: 0,
       totalAmount: 0,
-      notes: '',
-      hasStones: false,
-      stoneDetails: ''
+      notes: ''
+      // Removed: hasStones, stoneDetails, stonePrice
     }],
     paymentMethod: 'cash',
     paymentStatus: 'completed',
@@ -80,6 +79,8 @@ const NewGoldPurchase = () => {
 
   // Customer and pricing states
   const [customers, setCustomers] = useState([]);
+  const [mycus, setmycus] = useState('');
+
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [pricesByMetal, setPricesByMetal] = useState({
@@ -170,6 +171,7 @@ const NewGoldPurchase = () => {
   };
 
   const handleCustomerChange = (event, newValue) => {
+    setmycus(newValue?._id );
     setFormData(prev => ({ ...prev, customer: newValue?._id || null }));
   };
 
@@ -227,17 +229,15 @@ const NewGoldPurchase = () => {
           {
             id: uuidv4(),
             metalType: 'gold',
-            description: '',
+            description: 'Gold Item', // Default description added here
             netWeight: 0,
             grossWeight: 0,
             purity: 0,
             karatPurity: '22K',
             pricePerGram: 0,
             totalAmount: 0,
-            notes: '',
-            hasStones: false,
-            stoneDetails: '',
-            stonePrice: 0
+            notes: ''
+            // Removed: hasStones, stoneDetails, stonePrice
           }
         ]
       };
@@ -384,17 +384,44 @@ const NewGoldPurchase = () => {
   };
 
   const handleSave = async () => {
-    // Validation
+    // Validate customer
     if (!formData.customer) {
       toast.error('Please select a customer');
       return;
     }
 
-    const { totalNetWeight, totalGrossWeight, totalAmount } = calculateTotals();
-    
-    if (formData.items.length === 0 || totalNetWeight <= 0) {
-      toast.error('Please add at least one item with weight');
+    // Validate items
+    if (formData.items.length === 0) {
+      toast.error('Please add at least one item');
       return;
+    }
+
+    // Validate each item
+    for (const [i, item] of formData.items.entries()) {
+      if (!item.description?.trim()) {
+        toast.error(`Item ${i + 1}: Description is required`);
+        return;
+      }
+      
+      if (!item.netWeight || isNaN(Number(item.netWeight)) || Number(item.netWeight) <= 0) {
+        toast.error(`Item ${i + 1}: Valid weight is required`);
+        return;
+      }
+      
+      if (!item.purity || isNaN(Number(item.purity)) || Number(item.purity) < 0 || Number(item.purity) > 100) {
+        toast.error(`Item ${i + 1}: Valid purity (0-100) is required`);
+        return;
+      }
+      
+      if (!item.karatPurity) {
+        toast.error(`Item ${i + 1}: Karat purity is required`);
+        return;
+      }
+      
+      if (!item.pricePerGram || isNaN(Number(item.pricePerGram)) || Number(item.pricePerGram) <= 0) {
+        toast.error(`Item ${i + 1}: Valid price per gram is required`);
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -405,61 +432,41 @@ const NewGoldPurchase = () => {
         referenceNumber: formData.referenceNumber,
         customer: formData.customer,
         items: formData.items.map(item => ({
-          description: item.description,
+          description: item.description?.trim() || '',
           metalType: item.metalType,
-          netWeight: parseFloat(item.netWeight),
+          weight: parseFloat(item.netWeight),
           grossWeight: parseFloat(item.grossWeight),
           purity: parseFloat(item.purity),
           karatPurity: item.karatPurity,
           pricePerGram: parseFloat(item.pricePerGram),
           totalAmount: parseFloat(item.totalAmount),
-          notes: item.notes,
-          hasStones: item.hasStones,
-          stoneDetails: item.stoneDetails,
-          stonePrice: parseFloat(item.stonePrice || 0)
+          notes: item.notes
         })),
-        totalNetWeight,
+        totalNetWeight: totalNetWeight,
         totalGrossWeight,
         totalAmount,
         paymentMethod: formData.paymentMethod,
         paymentStatus: formData.paymentStatus,
         notes: formData.notes,
-        processedBy: formData.processedBy
+        processedBy: mycus  // Ensure processedBy is either a valid ObjectId or null
       };
+      console.log(mycus);
+      
 
-      // If using IndexedDB
-      if (db && !dbLoading) {
-        const goldPurchaseData = {
-          ...purchaseData,
-          _id: uuidv4(),
-          createdAt: new Date().toISOString(),
-          _modified: true,
-          _isNew: true
-        };
+      // Send to backend API
+      const response = await axios.post(`${apiUrl}/gold-purchases`, purchaseData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-        // Add to IndexedDB
-        try {
-          await db.goldPurchases.add(goldPurchaseData);
-          toast.success('Gold purchase saved successfully');
-          navigate('/gold-purchases');
-        } catch (dbError) {
-          console.error('Error saving to IndexedDB:', dbError);
-          toast.error('Failed to save gold purchase locally');
-        }
-      } else {
-        // If using API directly
-        const response = await axios.post(`${apiUrl}/gold-purchases`, purchaseData, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (response.data.success) {
-          toast.success('Gold purchase saved successfully');
-          navigate('/gold-purchases');
-        }
+      if (response.data.success) {
+        toast.success('Gold purchase saved successfully');
+        navigate('/gold-purchases');
       }
     } catch (error) {
       console.error('Error saving gold purchase:', error);
-      toast.error('Failed to save gold purchase');
+      const errorMessage = error.response?.data?.message || 'Failed to save gold purchase';
+      console.log('Server error response:', error.response?.data);
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -549,10 +556,10 @@ const NewGoldPurchase = () => {
             <TableCell>Description</TableCell>
             <TableCell>Net Weight (g)</TableCell>
             <TableCell>Gross Weight (g)</TableCell>
-            <TableCell>Purity</TableCell>
+            <TableCell>Purity (%)</TableCell>
             <TableCell>Rate (per g)</TableCell>
             <TableCell>Total Amount</TableCell>
-            <TableCell>Has Stones</TableCell>
+            {/* Removed: <TableCell>Has Stones</TableCell> */}
             <TableCell width="120px">Actions</TableCell>
           </TableRow>
         </TableHead>
@@ -593,7 +600,20 @@ const NewGoldPurchase = () => {
                 helperText={errors?.items?.[index]?.grossWeight}
               />
             </TableCell>
-            <TableCell>{item.purity}%</TableCell>
+            <TableCell>
+              <TextField
+                fullWidth
+                variant="outlined"
+                size="small"
+                type="number"
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                  inputProps: { min: 0, max: 100, step: 0.01 }
+                }}
+                value={item.purity}
+                onChange={(e) => handleItemChange(item.id, 'purity', e.target.value)}
+              />
+            </TableCell>
             <TableCell>
               <TextField
                 fullWidth
@@ -602,45 +622,16 @@ const NewGoldPurchase = () => {
                 type="number"
                 InputProps={{
                   endAdornment: <InputAdornment position="end">₹</InputAdornment>,
-                  inputProps: { min: 0, step: 0.001 }
+                  inputProps: { min: 0, step: 0.01 }
                 }}
-                value={item.rate}
-                onChange={(e) => handleItemChange(item.id, 'rate', e.target.value)}
-                onBlur={validateForm}
-                error={!!(errors?.items?.[index]?.rate)}
-                helperText={errors?.items?.[index]?.rate}
+                value={item.pricePerGram}
+                onChange={(e) => handleItemChange(item.id, 'pricePerGram', e.target.value)}
               />
             </TableCell>
-            <TableCell>{item.totalAmount.toFixed(2)}</TableCell>
             <TableCell>
-              <Box sx={{ display: 'flex' }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={item.hasStones}
-                      onChange={(e) => handleItemChange(item.id, 'hasStones', e.target.checked)}
-                      size="small"
-                    />
-                  }
-                  label="Has Stones"
-                />
-                {item.hasStones && (
-                  <TextField
-                    variant="outlined"
-                    size="small"
-                    type="number"
-                    label="Stone Price"
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start">₹</InputAdornment>,
-                      inputProps: { min: 0, step: 0.01 }
-                    }}
-                    sx={{ ml: 1, minWidth: '150px' }}
-                    value={item.stonePrice || 0}
-                    onChange={(e) => handleItemChange(item.id, 'stonePrice', e.target.value)}
-                  />
-                )}
-              </Box>
+              {item.totalAmount.toFixed(2)}
             </TableCell>
+            {/* Removed: Has Stones cell */}
             <TableCell>
               <IconButton
                 color="error"
@@ -812,4 +803,4 @@ const NewGoldPurchase = () => {
   );
 };
 
-export default NewGoldPurchase; 
+export default NewGoldPurchase;

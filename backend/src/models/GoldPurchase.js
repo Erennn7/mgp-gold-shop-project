@@ -82,7 +82,6 @@ const goldPurchaseSchema = new mongoose.Schema(
     processedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'User reference is required']
     },
     receiptSent: {
       type: Boolean,

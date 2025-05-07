@@ -5,6 +5,9 @@ import { Box, CircularProgress } from '@mui/material';
 import Layout from './components/Layout/Layout';
 import { useAuth } from './store/AuthContext';
 import { useDatabase } from './store/DatabaseContext';
+import GoldSupplies from './pages/GoldSupplies';
+import GoldSupplyDetail from './pages/GoldSupplyDetail';
+import GoldSupplyForm from './pages/GoldSupplyForm';
 
 // Direct imports instead of lazy loading
 import Login from './pages/Login';
@@ -106,6 +109,9 @@ function App() {
         <Route path="gold-purchases" element={<GoldPurchases />} />
         <Route path="gold-purchases/new" element={<NewGoldPurchase />} />
         <Route path="gold-purchases/:id" element={<GoldPurchaseDetail />} />
+        <Route path="gold-supplies" element={<GoldSupplies />} />
+        <Route path="gold-supplies/new" element={<GoldSupplyForm />} />
+        <Route path="gold-supplies/:id" element={<GoldSupplyDetail />} />
         <Route path="savings-schemes" element={<SavingsSchemes />} />
         <Route path="savings-schemes/new" element={<NewSavingsScheme />} />
         <Route path="savings-schemes/:id" element={<SavingsSchemeDetail />} />
@@ -116,4 +122,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

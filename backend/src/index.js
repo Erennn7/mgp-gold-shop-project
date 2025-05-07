@@ -104,6 +104,8 @@ const pricesRoutes = require('./routes/prices');
 const authRoutes = require('./routes/auth');
 const goldPurchasesRoutes = require('./routes/goldPurchases');
 const savingsSchemesRoutes = require('./routes/savingsScheme');
+// Fix the path to goldSupplyRoutes
+const goldSupplyRoutes = require('./routes/goldSupplyRoutes');
 
 // Mount routes
 app.use('/api/products', productsRoutes);
@@ -115,6 +117,8 @@ app.use('/api/prices', pricesRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/gold-purchases', goldPurchasesRoutes);
 app.use('/api/savings-schemes', savingsSchemesRoutes);
+// Fix the route path to include /api prefix
+app.use('/api/gold-supplies', goldSupplyRoutes);
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, '../public')));
@@ -146,4 +150,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-module.exports = app; 
+module.exports = app;

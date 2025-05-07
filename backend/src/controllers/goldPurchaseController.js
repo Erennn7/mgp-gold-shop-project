@@ -78,34 +78,99 @@ exports.getGoldPurchaseById = async (req, res) => {
 exports.createGoldPurchase = async (req, res) => {
   try {
     const purchaseData = req.body;
-    
-    // Process each item to ensure totalAmount is calculated correctly
-    if (purchaseData.items && Array.isArray(purchaseData.items)) {
-      purchaseData.items = purchaseData.items.map(item => {
-        // Calculate total amount based on weight, purity and price per gram
-        const totalAmount = item.weight * (item.purity / 100) * item.pricePerGram;
-        return {
-          ...item,
-          totalAmount: parseFloat(totalAmount.toFixed(2))
-        };
+
+    // Validate required fields
+    if (!purchaseData.customer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer is required'
       });
     }
-    
-    // Calculate total weight and amount (will also be done in pre-save hook)
+
+    // Validate items
+    if (!purchaseData.items || !Array.isArray(purchaseData.items) || purchaseData.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one item is required'
+      });
+    }
+
+    // Validate each item
+    for (const [i, item] of purchaseData.items.entries()) {
+      if (!item.metalType || !['gold', 'silver'].includes(item.metalType)) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${i + 1}: Invalid metal type`
+        });
+      }
+      
+      if (!item.description?.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${i + 1}: Description is required`
+        });
+      }
+      
+      if (!item.weight || isNaN(Number(item.weight)) || Number(item.weight) <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${i + 1}: Valid weight is required`
+        });
+      }
+      
+      if (!item.purity || isNaN(Number(item.purity)) || Number(item.purity) < 0 || Number(item.purity) > 100) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${i + 1}: Valid purity (0-100) is required`
+        });
+      }
+      
+      if (!item.karatPurity) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${i + 1}: Karat purity is required`
+        });
+      }
+      
+      if (!item.pricePerGram || isNaN(Number(item.pricePerGram)) || Number(item.pricePerGram) <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${i + 1}: Valid price per gram is required`
+        });
+      }
+    }
+
+    // Process items and calculate totals
+    purchaseData.items = purchaseData.items.map(item => ({
+      ...item,
+      weight: parseFloat(item.weight),
+      grossWeight: parseFloat(item.grossWeight),
+      purity: parseFloat(item.purity),
+      pricePerGram: parseFloat(item.pricePerGram),
+      totalAmount: parseFloat(item.totalAmount)
+    }));
+
     const totalWeight = purchaseData.items.reduce((sum, item) => sum + item.weight, 0);
+    const totalGrossWeight = purchaseData.items.reduce((sum, item) => sum + item.grossWeight, 0);
     const totalAmount = purchaseData.items.reduce((sum, item) => sum + item.totalAmount, 0);
-    
-    purchaseData.totalWeight = totalWeight;
-    purchaseData.totalAmount = totalAmount;
-    
-    // Create the gold purchase
-    const goldPurchase = await GoldPurchase.create(purchaseData);
-    
+
+    // Set processedBy to authenticated user or null
+    purchaseData.processedBy = req.user?._id || null;
+
+    // Create gold purchase
+    const goldPurchase = await GoldPurchase.create({
+      ...purchaseData,
+      totalWeight,
+      totalGrossWeight,
+      totalAmount
+    });
+
     res.status(201).json({
       success: true,
       message: 'Gold purchase recorded successfully',
       data: goldPurchase
     });
+
   } catch (error) {
     console.error('Error creating gold purchase:', error);
     res.status(500).json({
@@ -344,4 +409,4 @@ exports.getPricingInfo = async (req, res) => {
       error: error.message
     });
   }
-}; 
+};

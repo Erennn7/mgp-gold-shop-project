@@ -66,90 +66,32 @@ const GoldPurchaseDetail = () => {
         
         if (db && !dbLoading) {
           try {
-            // First try to get purchase directly from goldPurchases
-            console.log('Querying database for _id:', id);
-            const allPurchases = await db.goldPurchases.toArray();
-            console.log('All purchases in database:', allPurchases);
-            
-            const purchase = await db.goldPurchases
-              .where('_id')
-              .equals(id)
-              .first();
-            
-            console.log('Purchase query result:', purchase);
+            // Try to get purchase using the safer method
+            const purchase = await db.getById('goldPurchases', id);
             
             if (purchase) {
-              console.log('Found purchase in local database:', purchase);
+              console.log('Found purchase:', purchase);
               
-              // Get customer details if available
-              let purchaseWithCustomer = { ...purchase };
-              
-              if (purchase.customer) {
-                const customer = await db.customers
-                  .where('_id')
-                  .equals(purchase.customer)
-                  .first();
-                
-                if (customer) {
-                  purchaseWithCustomer.customer = customer;
+              // If customer is just an ID, fetch the customer details
+              if (purchase.customer && typeof purchase.customer === 'string') {
+                try {
+                  const customerData = await db.getById('customers', purchase.customer);
+                  if (customerData) {
+                    purchase.customer = customerData;
+                  }
+                } catch (customerError) {
+                  console.error('Error fetching customer details:', customerError);
                 }
               }
               
-              // Ensure items have required fields
-              if (purchaseWithCustomer.items) {
-                purchaseWithCustomer.items = purchaseWithCustomer.items.map(item => ({
-                  ...item,
-                  weight: parseFloat(item.weight) || 0,
-                  purity: parseFloat(item.purity) || 0,
-                  pricePerGram: parseFloat(item.pricePerGram) || 0,
-                  totalAmount: parseFloat(item.totalAmount) || 0
-                }));
-              }
-              
-              console.log('Final purchase with customer:', purchaseWithCustomer);
-              setPurchase(purchaseWithCustomer);
-              setLoading(false);
-              return;
+              setPurchase(purchase);
             } else {
-              console.log('Purchase not found in local database, using mock data');
-              
-              // If no purchase was found with the ID, create a mock one for development
-              const mockPurchase = {
-                _id: id,
-                referenceNumber: `GPR-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, '0')}-1234`,
-                customer: {
-                  _id: 'mock-customer-id',
-                  name: 'John Doe',
-                  phone: '9876543210',
-                  email: 'john.doe@example.com'
-                },
-                items: [
-                  {
-                    metalType: 'gold',
-                    description: 'Gold Chain',
-                    weight: 15.5,
-                    purity: 91.6,
-                    karatPurity: '22K',
-                    pricePerGram: 5500,
-                    totalAmount: 78177.50
-                  }
-                ],
-                totalWeight: 15.5,
-                totalAmount: 78177.50,
-                paymentMethod: 'cash',
-                paymentStatus: 'completed',
-                notes: 'This is a mock gold purchase for development purposes.',
-                processedBy: 'demo-user',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              };
-              
-              setPurchase(mockPurchase);
-              setLoading(false);
-              return;
+              console.warn('Purchase not found in local database');
+              toast.error('Purchase not found');
             }
           } catch (dbError) {
             console.error('Error fetching from local database:', dbError);
+            toast.error('Error loading purchase details');
           }
         }
       }
@@ -655,4 +597,4 @@ const GoldPurchaseDetail = () => {
   );
 };
 
-export default GoldPurchaseDetail; 
+export default GoldPurchaseDetail;
