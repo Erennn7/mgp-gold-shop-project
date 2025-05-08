@@ -383,7 +383,9 @@ class JewelleryShopDB extends Dexie {
         { name: 'prices', endpoint: '/api/prices' },
         { name: 'customers', endpoint: '/api/customers' },
         { name: 'sales', endpoint: '/api/sales' },
-        { name: 'loans', endpoint: '/api/loans' }
+        { name: 'loans', endpoint: '/api/loans' },
+        { name: 'goldPurchases', endpoint: '/api/gold-purchases' },
+        { name: 'goldSupplies', endpoint: '/api/gold-supplies' }
       ];
       
       // Pull data from each table if we're online
@@ -808,7 +810,7 @@ export default DatabaseContext;
 // Add a function to perform a full sync of data when online
 const performFullSync = async (db) => {
   try {
-    console.log('Performing full data sync');
+    console.log('Performing full data sync with MongoDB Atlas');
     
     // Define collections to sync
     const collections = [

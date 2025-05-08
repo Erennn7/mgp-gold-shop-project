@@ -104,8 +104,13 @@ const pricesRoutes = require('./routes/prices');
 const authRoutes = require('./routes/auth');
 const goldPurchasesRoutes = require('./routes/goldPurchases');
 const savingsSchemesRoutes = require('./routes/savingsScheme');
-// Fix the path to goldSupplyRoutes
-const goldSupplyRoutes = require('./routes/goldSupplyRoutes');
+// Import routes
+
+
+;
+
+const goldPurchaseRoutes = require('./routes/goldPurchases');
+const goldSupplyRoutes = require('./routes/goldSupplyRoutes'); // Add this line
 
 // Mount routes
 app.use('/api/products', productsRoutes);

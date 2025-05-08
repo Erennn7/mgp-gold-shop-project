@@ -124,6 +124,5 @@ goldSupplySchema.pre('save', function(next) {
   next();
 });
 
-const GoldSupply = mongoose.model('GoldSupply', goldSupplySchema);
-
-module.exports = GoldSupply;
+// Make sure this line exists at the end of the file
+module.exports = mongoose.model('GoldSupply', goldSupplySchema);

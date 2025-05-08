@@ -227,6 +227,28 @@ const GoldSupplyForm = () => {
     });
   };
 
+  // Add this missing function
+  const calculateTotals = () => {
+    // Calculate total amount from all items
+    const totalAmount = formData.items.reduce((sum, item) => {
+      const total = parseFloat(item.total) || 0;
+      return sum + total;
+    }, 0);
+    
+    // Calculate balance due
+    const amountPaid = parseFloat(formData.amountPaid) || 0;
+    const balanceDue = totalAmount - amountPaid;
+    
+    // Update form data with calculated values
+    setFormData(prevData => ({
+      ...prevData,
+      totalAmount,
+      balanceDue
+    }));
+    
+    return { totalAmount, balanceDue };
+  };
+
   const validateForm = () => {
     // Check required fields
     if (!formData.invoiceNumber) {
@@ -262,93 +284,94 @@ const GoldSupplyForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-    
     setSaving(true);
     
     try {
+      // Calculate totals one more time to ensure accuracy
+      calculateTotals();
+      
       // Prepare data for submission
-      const submissionData = {
+      const supplyData = {
         ...formData,
-        // Remove the temporary IDs from items
-        items: formData.items.map(({ id, ...item }) => item)
+        // Make sure these fields are numbers
+        totalAmount: parseFloat(formData.totalAmount),
+        amountPaid: parseFloat(formData.amountPaid),
+        balanceDue: parseFloat(formData.balanceDue),
+        // Format items to ensure all numeric fields are numbers
+        items: formData.items.map(item => ({
+          ...item,
+          netWeight: parseFloat(item.netWeight),
+          grossWeight: item.grossWeight ? parseFloat(item.grossWeight) : undefined,
+          quantity: parseInt(item.quantity),
+          rate: parseFloat(item.rate),
+          total: parseFloat(item.total)
+        }))
       };
       
-      // DEVELOPMENT MOCK - Use local database in development mode without backend
-      if (process.env.NODE_ENV === 'development' && !process.env.REACT_APP_USE_REAL_API) {
-        console.log('DEVELOPMENT MODE: Saving gold supply to local database');
+      // Remove the 'id' property from each item as it's only used for the form
+      const cleanedSupplyData = {
+        ...supplyData,
+        items: supplyData.items.map(({ id, ...rest }) => rest)
+      };
+      
+      console.log('Submitting gold supply data:', cleanedSupplyData);
+      
+      // Use axios with authentication token
+      const config = {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      };
+      
+      let response;
+      if (isEditMode) {
+        response = await axios.put(`${apiUrl}/gold-supplies/${id}`, cleanedSupplyData, config);
+      } else {
+        response = await axios.post(`${apiUrl}/gold-supplies`, cleanedSupplyData, config);
+      }
+      
+      if (response.data.success) {
+        toast.success(`Gold supply ${isEditMode ? 'updated' : 'created'} successfully`);
         
+        // If we have a local database, update it too
         if (db && !dbLoading) {
           try {
+            const savedSupply = response.data.data;
+            
             if (isEditMode) {
-              // Update existing supply
-              await db.goldSupplies.update(id, {
-                ...submissionData,
-                updatedAt: new Date()
-              });
-              
-              toast.success('Gold supply updated successfully');
+              await db.goldSupplies.update(id, savedSupply);
             } else {
-              // Create new supply
-              const newId = uuidv4();
-              await db.goldSupplies.add({
-                ...submissionData,
-                _id: newId,
-                createdAt: new Date(),
-                updatedAt: new Date()
-              });
-              
-              toast.success('Gold supply created successfully');
+              await db.goldSupplies.add(savedSupply);
             }
             
-            navigate('/gold-supplies');
+            console.log('Local database updated with supply data');
           } catch (dbError) {
-            console.error('Error saving to local database:', dbError);
-            toast.error('Error saving gold supply');
+            console.error('Error updating local database:', dbError);
           }
         }
+        
+        // Navigate back to the list
+        navigate('/gold-supplies');
       } else {
-        // Use real API
-        if (isEditMode) {
-          // Update existing supply
-          const response = await axios.put(
-            `${apiUrl}/gold-supplies/${id}`,
-            submissionData,
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-          
-          if (response.data.success) {
-            toast.success('Gold supply updated successfully');
-            navigate('/gold-supplies');
-          } else {
-            toast.error(response.data.message || 'Failed to update gold supply');
-          }
-        } else {
-          // Create new supply
-          const response = await axios.post(
-            `${apiUrl}/gold-supplies`,
-            submissionData,
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-          
-          if (response.data.success) {
-            toast.success('Gold supply created successfully');
-            navigate('/gold-supplies');
-          } else {
-            toast.error(response.data.message || 'Failed to create gold supply');
-          }
-        }
+        toast.error('Failed to save gold supply');
       }
     } catch (error) {
       console.error('Error saving gold supply:', error);
-      toast.error('Failed to save gold supply');
+      
+      // Log more detailed error information
+      if (error.response) {
+        // The server responded with a status code outside the 2xx range
+        console.error('Server error details:', error.response.data);
+        toast.error(`Server error: ${error.response.data.message || 'Unknown server error'}`);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response received from server');
+        toast.error('No response from server. Please check your connection.');
+      } else {
+        // Something happened in setting up the request
+        toast.error(`Error: ${error.message}`);
+      }
     } finally {
       setSaving(false);
     }

@@ -14,117 +14,46 @@ const connectDB = async () => {
     // Check if we're running in Electron
     const isElectron = process.env.ELECTRON_RUN === 'true';
     
-    // Use MongoDB Atlas URI or local MongoDB server
-    const dbURI = 'mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/'
-
-    // If we're in development and not in Electron, try local connection first
-    const isDev = process.env.NODE_ENV === 'development';
-    const useLocalFirst = isDev && !isElectron;
+    // Use MongoDB Atlas URI from environment variables
+    const dbURI = process.env.MONGO_URI || 'mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/';
     
-    // Connection options to handle deprecation warnings
+    console.log('Connecting to MongoDB Atlas:', dbURI.replace(/\/\/([^:]+):[^@]+@/, '//***:***@'));
+    
+    // Connection options
     const options = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 10000, // 10 seconds timeout for server selection
-      socketTimeoutMS: 45000, // 45 seconds timeout for operations
-      family: 4, // Use IPv4, skip trying IPv6
-      maxPoolSize: 10, // Maximum number of connections in the pool
-      connectTimeoutMS: 10000, // 10 seconds timeout for initial connection
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      family: 4,
+      maxPoolSize: 10,
+      connectTimeoutMS: 10000,
       retryWrites: true,
-      // Auto-retry connection for 1 minute
       retryReads: true
     };
     
-    // Create connection log directory if running in Electron
-    if (isElectron) {
-      const appDir = process.env.APPDATA || 
-                    (process.platform === 'darwin' ? 
-                      path.join(process.env.HOME, 'Library', 'Application Support') : 
-                      path.join(process.env.HOME, '.local', 'share'));
-      
-      const logDir = path.join(appDir, 'mg-potdar-jewellers', 'logs');
-      
-      if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-      }
-      
-      // Log connection attempt
-      const logPath = path.join(logDir, 'db-connection.log');
-      fs.appendFileSync(logPath, `${new Date().toISOString()} - Connecting to: ${dbURI.replace(/\/\/([^:]+):[^@]+@/, '//***:***@')}\n`);
-    }
+    // Connect to MongoDB Atlas
+    const conn = await mongoose.connect(dbURI, options);
+    console.log(`MongoDB Atlas connected: ${conn.connection.host}`);
     
-    console.log(`Attempting to connect to MongoDB${useLocalFirst ? ' (trying local first)' : ''}...`);
-    
-    // Try to connect
-    let conn;
-    
-    if (useLocalFirst) {
-      // In development, try local MongoDB first
-      try {
-        conn = await mongoose.connect('mongodb+srv://eren:eren17@cluster0.qwo5y5c.mongodb.net/', options);
-        console.log('Connected to local MongoDB');
-      } catch (localError) {
-        console.log('Local MongoDB connection failed, trying Atlas...');
-        conn = await mongoose.connect(dbURI, options);
-      }
-    } else {
-      // In production or when specifically configured, go straight to the configured URI
-      conn = await mongoose.connect(dbURI, options);
-    }
-    
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    // Set connection status
     isConnected = true;
-    connectionAttempts = 0;
-    
-    // Handle connection errors after initial connection
-    mongoose.connection.on('error', (err) => {
-      console.error(`MongoDB connection error: ${err}`);
-      if (isConnected) {
-        isConnected = false;
-        // Try to reconnect
-        attemptReconnect();
-      }
-    });
-    
-    // Handle when the connection is disconnected
-    mongoose.connection.on('disconnected', () => {
-      console.log('MongoDB disconnected');
-      if (isConnected) {
-        isConnected = false;
-        // Try to reconnect
-        attemptReconnect();
-      }
-    });
-    
-    // Handle when the connection is reconnected
-    mongoose.connection.on('reconnected', () => {
-      console.log('MongoDB reconnected');
-      isConnected = true;
-      connectionAttempts = 0;
-    });
-    
-    // If the Node process ends, close the MongoDB connection
-    process.on('SIGINT', async () => {
-      try {
-        await mongoose.connection.close();
-        console.log('MongoDB connection closed due to app termination');
-        process.exit(0);
-      } catch (err) {
-        console.error('Error closing MongoDB connection:', err);
-        process.exit(1);
-      }
-    });
     
     return conn;
   } catch (error) {
-    console.error(`Error connecting to MongoDB: ${error.message}`);
+    console.error('MongoDB connection error:', error);
+    isConnected = false;
     
-    // If not already attempting to reconnect, start reconnection process
-    if (isConnected === false && connectionAttempts === 0) {
-      attemptReconnect();
+    // Retry connection if needed
+    if (connectionAttempts < MAX_RECONNECT_ATTEMPTS) {
+      connectionAttempts++;
+      console.log(`Retrying connection (${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS}) in ${RECONNECT_INTERVAL/1000} seconds...`);
+      
+      setTimeout(() => {
+        connectDB();
+      }, RECONNECT_INTERVAL);
     }
     
-    // Don't crash the server, just log the error
     return null;
   }
 };
@@ -207,4 +136,4 @@ module.exports = {
   connectDB, 
   testConnection, 
   getConnectionStatus 
-}; 
+};

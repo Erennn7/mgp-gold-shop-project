@@ -68,27 +68,22 @@ exports.getGoldSupplyById = async (req, res) => {
  */
 exports.createGoldSupply = async (req, res) => {
   try {
-    // Create the gold supply
-    const goldSupply = await GoldSupply.create({
-      ...req.body,
-      processedBy: req.user.id
-    });
+    // Log the request body for debugging
+    console.log('Creating new gold supply with data:', JSON.stringify(req.body, null, 2));
+    
+    // Create the gold supply in MongoDB
+    const goldSupply = new GoldSupply(req.body);
+    
+    // Save to MongoDB
+    const savedSupply = await goldSupply.save();
+    console.log('Gold supply saved successfully with ID:', savedSupply._id);
     
     res.status(201).json({
       success: true,
-      data: goldSupply
+      data: savedSupply
     });
   } catch (error) {
     console.error('Error creating gold supply:', error);
-    
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
-      return res.status(400).json({
-        success: false,
-        message: messages.join(', ')
-      });
-    }
-    
     res.status(500).json({
       success: false,
       message: 'Server error',
